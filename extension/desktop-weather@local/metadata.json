@@ -1,0 +1,6 @@
+{
+  "uuid": "desktop-weather@local",
+  "name": "Desktop Weather",
+  "description": "A desktop-layer weather widget backed by .NET",
+  "shell-version": ["46"]
+}

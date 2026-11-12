@@ -1,0 +1,96 @@
+.desktop-weather {
+    background-color: rgba(25, 30, 40, 0.88);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 18px;
+    padding: 18px 22px;
+    min-width: 220px;
+    color: #ffffff;
+}
+
+.desktop-weather-location {
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.desktop-weather-temperature {
+    font-size: 42px;
+    font-weight: bold;
+}
+
+.desktop-weather-conditions {
+    font-size: 16px;
+}
+
+.desktop-weather-details {
+    padding-top: 10px;
+    font-size: 13px;
+}
+
+.desktop-weather-status-row {
+    padding-top: 10px;
+}
+
+.desktop-weather-status {
+    color: #c5ceda;
+    font-size: 11px;
+}
+
+.desktop-weather-settings-button {
+    width: 18px;
+    height: 18px;
+    padding: 3px;
+    border-radius: 9px;
+    background-color: transparent;
+    color: #c5ceda;
+}
+
+.desktop-weather-settings-button:hover,
+.desktop-weather-settings-button:focus {
+    background-color: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+}
+
+.desktop-weather-settings-icon {
+    icon-size: 12px;
+}
+
+.desktop-weather-settings-content {
+    min-width: 340px;
+    spacing: 10px;
+}
+
+.desktop-weather-settings-title {
+    padding-bottom: 4px;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.desktop-weather-settings-label {
+    padding-top: 4px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.desktop-weather-settings-entry {
+    padding: 8px;
+    border-radius: 6px;
+}
+
+.desktop-weather-unit-row {
+    spacing: 8px;
+}
+
+.desktop-weather-unit-button {
+    min-width: 100px;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+.desktop-weather-unit-button.selected {
+    background-color: rgba(98, 160, 234, 0.35);
+}
+
+.desktop-weather-settings-error {
+    color: #ff8a8a;
+    font-size: 12px;
+}
