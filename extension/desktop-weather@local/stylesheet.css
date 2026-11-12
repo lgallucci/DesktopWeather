@@ -15,10 +15,24 @@
 .desktop-weather-temperature {
     font-size: 42px;
     font-weight: bold;
+    text-align: right;
+}
+
+.desktop-weather-current {
+    spacing: 10px;
+}
+
+.desktop-weather-current-text {
+    spacing: 0;
+}
+
+.desktop-weather-icon {
+    icon-size: 44px;
 }
 
 .desktop-weather-conditions {
     font-size: 16px;
+    text-align: right;
 }
 
 .desktop-weather-details {

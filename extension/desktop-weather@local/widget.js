@@ -19,16 +19,42 @@ export default class DesktopWeatherExtension extends Extension {
             reactive: false,
         });
         this._location = new St.Label({style_class: 'desktop-weather-location', text: 'Desktop Weather'});
-        this._temperature = new St.Label({style_class: 'desktop-weather-temperature', text: '--'});
-        this._conditions = new St.Label({style_class: 'desktop-weather-conditions', text: 'Loading weather...'});
+        this._temperature = new St.Label({
+            style_class: 'desktop-weather-temperature',
+            text: '--',
+            x_expand: true,
+        });
+        this._conditions = new St.Label({
+            style_class: 'desktop-weather-conditions',
+            text: 'Loading weather...',
+            x_expand: true,
+        });
         this._details = new St.Label({style_class: 'desktop-weather-details', text: ''});
+        this._weatherIcon = new St.Icon({
+            icon_name: 'weather-overcast-symbolic',
+            style_class: 'desktop-weather-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._currentText = new St.BoxLayout({
+            style_class: 'desktop-weather-current-text',
+            vertical: true,
+            x_expand: true,
+        });
+        this._currentText.add_child(this._temperature);
+        this._currentText.add_child(this._conditions);
+        this._currentWeather = new St.BoxLayout({
+            style_class: 'desktop-weather-current',
+            x_expand: true,
+        });
+        this._currentWeather.add_child(this._weatherIcon);
+        this._currentWeather.add_child(this._currentText);
         this._status = new St.Label({
             style_class: 'desktop-weather-status',
             text: '',
             x_expand: true,
         });
-        for (const label of [this._location, this._temperature, this._conditions, this._details])
-            this._widget.add_child(label);
+        for (const actor of [this._location, this._currentWeather, this._details])
+            this._widget.add_child(actor);
 
         this._statusRow = new St.BoxLayout({
             style_class: 'desktop-weather-status-row',
@@ -247,6 +273,7 @@ export default class DesktopWeatherExtension extends Extension {
                     this._location.text = weather.location;
                     this._temperature.text = `${Math.round(weather.temperature)}°${weather.temperatureUnit}`;
                     this._conditions.text = weather.conditions;
+                    this._weatherIcon.icon_name = this._weatherIconForConditions(weather.conditions);
                     this._details.text = `Feels like ${Math.round(weather.feelsLike)}° · Humidity ${weather.humidity}%\nWind ${Math.round(weather.windSpeed)} ${weather.windUnit}`;
                     this._status.text = 'Open-Meteo · Updated ' +
                         GLib.DateTime.new_now_local().format('%H:%M');
@@ -264,10 +291,33 @@ export default class DesktopWeatherExtension extends Extension {
         }
     }
 
+    _weatherIconForConditions(conditions) {
+        const description = conditions.toLowerCase();
+        if (description.includes('thunderstorm'))
+            return 'weather-storm-symbolic';
+        if (description.includes('snow'))
+            return 'weather-snow-symbolic';
+        if (description.includes('fog'))
+            return 'weather-fog-symbolic';
+        if (description.includes('drizzle'))
+            return 'weather-showers-scattered-symbolic';
+        if (description.includes('rain'))
+            return 'weather-showers-symbolic';
+        if (description.includes('overcast'))
+            return 'weather-overcast-symbolic';
+        if (description.includes('cloud'))
+            return 'weather-few-clouds-symbolic';
+        if (description.includes('clear'))
+            return 'weather-clear-symbolic';
+        return 'weather-severe-alert-symbolic';
+    }
+
     _showError(error) {
         console.error(`Desktop Weather: ${error.message}`);
-        if (!this._hasWeather)
+        if (!this._hasWeather) {
             this._conditions.text = 'Weather unavailable';
+            this._weatherIcon.icon_name = 'weather-severe-alert-symbolic';
+        }
         this._status.text = 'Update failed; see GNOME Shell logs';
     }
 
