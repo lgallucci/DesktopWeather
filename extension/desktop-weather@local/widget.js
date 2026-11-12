@@ -124,15 +124,13 @@ export default class DesktopWeatherExtension extends Extension {
         this._dailyTab.connect('clicked', () => this._setForecastMode('daily'));
         this._setForecastMode('hourly');
 
-        // Keep the widget with the wallpaper, outside the compositor's window stack.
+        // Keep the non-interactive widget with the wallpaper.
         Main.layoutManager._backgroundGroup.add_child(this._widget);
         for (const button of [this._settingsButton, this._hourlyTab, this._dailyTab])
-            Main.layoutManager.addChrome(button);
-        this._windowSignals = new Map();
-        this._restackedId = global.display.connect('restacked', () => this._syncWindows());
-        this._workspaceChangedId = global.workspace_manager.connect('active-workspace-changed',
-            () => this._updateControlVisibility());
-        this._syncWindows();
+            global.window_group.add_child(button);
+        this._restackedId = global.display.connect('restacked', () => this._restackControls());
+        this._windowMappedId = global.window_manager.connect_after('map', () => this._restackControls());
+        this._restackControls();
         this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => this._position());
         this._workareasChangedId = global.display.connect('workareas-changed', () => this._position());
         this._allocationChangedId = this._widget.connect('notify::allocation', () => this._position());
@@ -146,64 +144,22 @@ export default class DesktopWeatherExtension extends Extension {
         });
     }
 
-    _syncWindows() {
-        const actors = global.get_window_actors();
-        for (const actor of this._windowSignals.keys()) {
-            if (!actors.includes(actor))
-                this._untrackWindow(actor);
-        }
-
-        for (const actor of actors) {
-            if (this._windowSignals.has(actor))
-                continue;
+    _restackControls() {
+        let anchor = Main.layoutManager._backgroundGroup;
+        for (const actor of global.window_group.get_children()) {
             const window = actor.meta_window;
-            if (!window)
+            if (!window || !actor.mapped)
                 continue;
-            const update = () => this._updateControlVisibility();
-            const actorSignals = [
-                'notify::allocation', 'notify::mapped', 'notify::visible', 'notify::opacity',
-                'notify::translation-x', 'notify::translation-y', 'notify::scale-x', 'notify::scale-y',
-            ].map(signal => actor.connect(signal, update));
-            actorSignals.push(actor.connect('destroy', () => {
-                this._untrackWindow(actor);
-                this._updateControlVisibility();
-            }));
-            const windowSignals = [
-                'position-changed', 'size-changed', 'workspace-changed',
-                'notify::minimized', 'notify::title',
-            ].map(signal => window.connect(signal, update));
-            this._windowSignals.set(actor, {actorSignals, window, windowSignals});
-        }
-        this._updateControlVisibility();
-    }
-
-    _untrackWindow(actor) {
-        const tracked = this._windowSignals.get(actor);
-        if (!tracked)
-            return;
-        this._windowSignals.delete(actor);
-        for (const id of tracked.actorSignals)
-            actor.disconnect(id);
-        for (const id of tracked.windowSignals)
-            tracked.window.disconnect(id);
-    }
-
-    _updateControlVisibility() {
-        const windows = [];
-        for (const [actor, {window}] of this._windowSignals) {
-            // Zorin's Wayland desktop icons use normal windows with this title.
-            if (!actor.get_paint_visibility() || window.get_window_type() === Meta.WindowType.DESKTOP ||
-                window.get_title()?.startsWith('Desktop Icons '))
-                continue;
-            const [x, y] = actor.get_transformed_position();
-            const [width, height] = actor.get_transformed_size();
-            windows.push({x, y, width, height});
+            // Zorin's Wayland desktop windows are tracked by its desktop-icons extension.
+            if (window.get_window_type() !== Meta.WindowType.DESKTOP &&
+                !window.customJS_ding?.keepAtBottom)
+                break;
+            anchor = actor;
         }
 
         for (const button of [this._settingsButton, this._hourlyTab, this._dailyTab]) {
-            button.visible = !windows.some(window =>
-                button.x < window.x + window.width && button.x + button.width > window.x &&
-                button.y < window.y + window.height && button.y + button.height > window.y);
+            global.window_group.set_child_above_sibling(button, anchor);
+            anchor = button;
         }
     }
 
@@ -225,7 +181,6 @@ export default class DesktopWeatherExtension extends Extension {
                 buttonX + (slot.width - button.width) / 2,
                 buttonY + (slot.height - button.height) / 2);
         }
-        this._updateControlVisibility();
     }
 
     _setForecastMode(mode) {
@@ -543,9 +498,7 @@ export default class DesktopWeatherExtension extends Extension {
         Main.layoutManager.disconnect(this._monitorsChangedId);
         global.display.disconnect(this._workareasChangedId);
         global.display.disconnect(this._restackedId);
-        global.workspace_manager.disconnect(this._workspaceChangedId);
-        for (const actor of this._windowSignals.keys())
-            this._untrackWindow(actor);
+        global.window_manager.disconnect(this._windowMappedId);
         this._widget.disconnect(this._allocationChangedId);
         for (const button of [this._settingsButton, this._hourlyTab, this._dailyTab])
             button.destroy();

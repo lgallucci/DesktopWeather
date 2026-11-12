@@ -28,56 +28,20 @@ class Actor {
     }
 }
 
-class SignalSource {
-    constructor() {
-        this.handlers = new Map();
-        this.nextId = 1;
-    }
-
-    connect(name, callback) {
-        const id = this.nextId++;
-        this.handlers.set(id, {name, callback});
-        return id;
-    }
-
-    disconnect(id) {
-        this.handlers.delete(id);
-    }
-
-    emit(name) {
-        for (const handler of this.handlers.values()) {
-            if (handler.name === name)
-                handler.callback();
-        }
-    }
-}
-
-class WindowActor extends SignalSource {
-    constructor(title, type, x, y, width, height) {
-        super();
-        this.meta_window = new SignalSource();
-        this.meta_window.get_title = () => title;
-        this.meta_window.get_window_type = () => type;
-        Object.assign(this, {x, y, width, height, painted: true});
-    }
-
-    get_paint_visibility() {
-        return this.painted;
-    }
-
-    get_transformed_position() {
-        return [this.x, this.y];
-    }
-
-    get_transformed_size() {
-        return [this.width, this.height];
-    }
-}
-
-let windows = [];
+const background = new Actor();
+const windowGroup = {
+    children: [],
+    get_children() {
+        return [...this.children];
+    },
+    set_child_above_sibling(child, sibling) {
+        this.children.splice(this.children.indexOf(child), 1);
+        this.children.splice(this.children.indexOf(sibling) + 1, 0, child);
+    },
+};
 const Widget = new Function('Extension', 'St', 'Clutter', 'GLib', 'Meta', 'Main', 'global', source)(
     class {}, {BoxLayout: Actor, Label: Actor, Icon: Actor}, {ActorAlign: {CENTER: 0}}, GLib,
-    {WindowType: {DESKTOP: 0}}, {}, {get_window_actors: () => windows});
+    {WindowType: {DESKTOP: 0}}, {layoutManager: {_backgroundGroup: background}}, {window_group: windowGroup});
 const widget = new Widget();
 widget._hourly = new Actor();
 widget._daily = new Actor();
@@ -89,33 +53,27 @@ const assert = (condition, message) => {
         throw new Error(message);
 };
 
-Object.assign(widget._hourlyTab, {x: 0, y: 0, width: 72, height: 24});
-Object.assign(widget._dailyTab, {x: 76, y: 0, width: 72, height: 24});
-Object.assign(widget._settingsButton, {x: 150, y: 0, width: 18, height: 18});
-widget._windowSignals = new Map();
-const desktop = new WindowActor('Desktop Icons 1', 1, 0, 0, 300, 300);
-const desktopWindow = new WindowActor(null, 0, 0, 0, 300, 300);
-const application = new WindowActor('Application', 1, 200, 0, 100, 100);
-windows = [desktop, desktopWindow, application];
-widget._syncWindows();
-assert(widget._hourlyTab.visible && widget._dailyTab.visible && widget._settingsButton.visible,
-    'Desktop and non-overlapping windows must not hide controls');
-application.x = 50;
-application.meta_window.emit('position-changed');
-assert(!widget._hourlyTab.visible && !widget._dailyTab.visible && widget._settingsButton.visible,
-    'Overlapping windows must hide only the affected controls');
-application.x = 140;
-application.meta_window.emit('position-changed');
-assert(widget._hourlyTab.visible && !widget._dailyTab.visible && !widget._settingsButton.visible,
-    'Controls must respond when a window moves');
-application.painted = false;
-application.emit('notify::mapped');
-assert(widget._hourlyTab.visible && widget._dailyTab.visible && widget._settingsButton.visible,
-    'Controls must reappear when a window is hidden');
-windows = [desktop, desktopWindow];
-widget._syncWindows();
-assert(application.handlers.size === 0 && application.meta_window.handlers.size === 0,
-    'Removed windows must have their signals disconnected');
+const hiddenApp = {mapped: false, meta_window: {get_window_type: () => 1}};
+const desktop = {mapped: true, meta_window: {get_window_type: () => 1, customJS_ding: {keepAtBottom: true}}};
+const secondDesktop = {mapped: true, meta_window: {get_window_type: () => 1, customJS_ding: {keepAtBottom: true}}};
+const desktopWindow = {mapped: true, meta_window: {get_window_type: () => 0}};
+const application = {mapped: true, meta_window: {get_window_type: () => 1}};
+const controls = [widget._settingsButton, widget._hourlyTab, widget._dailyTab];
+windowGroup.children = [background, hiddenApp, desktop, secondDesktop, desktopWindow, application, ...controls];
+widget._restackControls();
+assert(windowGroup.children.indexOf(desktopWindow) < windowGroup.children.indexOf(widget._settingsButton) &&
+    windowGroup.children.indexOf(widget._dailyTab) < windowGroup.children.indexOf(application),
+    'Controls must be above all desktop windows and below applications, even with hidden windows');
+windowGroup.children = [background, desktop, application, ...controls];
+widget._restackControls();
+assert(windowGroup.children.indexOf(desktop) < windowGroup.children.indexOf(widget._settingsButton) &&
+    windowGroup.children.indexOf(widget._dailyTab) < windowGroup.children.indexOf(application),
+    'Controls must be restacked after desktop windows change');
+windowGroup.children = [background, application, ...controls];
+widget._restackControls();
+assert(windowGroup.children.indexOf(background) < windowGroup.children.indexOf(widget._settingsButton) &&
+    windowGroup.children.indexOf(widget._dailyTab) < windowGroup.children.indexOf(application),
+    'Controls must stay below applications when there is no desktop window');
 
 const hours = Array.from({length: 6}, (_, i) => ({
     time: `${String(i).padStart(2, '0')}:00`,
