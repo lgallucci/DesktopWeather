@@ -4,8 +4,9 @@ A weather widget for the GNOME desktop on Zorin OS. A small GNOME Shell
 extension displays the widget above the wallpaper and behind application
 windows; a C#/.NET process retrieves current weather from Open-Meteo. A gear
 button in the widget opens settings for the city and temperature units, and
-tabs switch between hourly and daily forecasts. Clicks elsewhere on the
-weather display pass through to the desktop.
+tabs switch between hourly and daily forecasts. Hover over a forecast icon to
+see its weather description. Clicks outside the controls and forecast icons
+pass through to the desktop.
 Application windows cover the widget and its controls.
 Control stacking relies on GNOME Shell internals and Zorin desktop icons'
 private window metadata; other desktop configurations may behave differently.

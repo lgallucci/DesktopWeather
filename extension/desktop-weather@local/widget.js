@@ -58,6 +58,11 @@ export default class DesktopWeatherExtension extends Extension {
             this._widget.add_child(actor);
 
         this._forecastMode = 'hourly';
+        this._forecastTargets = [];
+        this._tooltip = new St.Label({
+            style_class: 'desktop-weather-tooltip',
+            visible: false,
+        });
         const forecastTabs = new St.BoxLayout({style_class: 'desktop-weather-forecast-tabs'});
         this._hourlyTabSlot = new St.Widget({width: 72, height: 24});
         this._dailyTabSlot = new St.Widget({width: 72, height: 24});
@@ -126,8 +131,8 @@ export default class DesktopWeatherExtension extends Extension {
 
         // Keep the non-interactive widget with the wallpaper.
         Main.layoutManager._backgroundGroup.add_child(this._widget);
-        for (const button of [this._settingsButton, this._hourlyTab, this._dailyTab])
-            global.window_group.add_child(button);
+        for (const actor of [this._settingsButton, this._hourlyTab, this._dailyTab, this._tooltip])
+            global.window_group.add_child(actor);
         this._restackedId = global.display.connect('restacked', () => this._restackControls());
         this._windowMappedId = global.window_manager.connect_after('map', () => this._restackControls());
         this._restackControls();
@@ -157,9 +162,13 @@ export default class DesktopWeatherExtension extends Extension {
             anchor = actor;
         }
 
-        for (const button of [this._settingsButton, this._hourlyTab, this._dailyTab]) {
-            global.window_group.set_child_above_sibling(button, anchor);
-            anchor = button;
+        const actors = [
+            this._settingsButton, this._hourlyTab, this._dailyTab,
+            ...this._forecastTargets.map(target => target.actor), this._tooltip,
+        ];
+        for (const actor of actors) {
+            global.window_group.set_child_above_sibling(actor, anchor);
+            anchor = actor;
         }
     }
 
@@ -181,16 +190,80 @@ export default class DesktopWeatherExtension extends Extension {
                 buttonX + (slot.width - button.width) / 2,
                 buttonY + (slot.height - button.height) / 2);
         }
+        for (const target of this._forecastTargets) {
+            if (target.mode !== this._forecastMode)
+                continue;
+            const [iconX, iconY] = target.icon.get_transformed_position();
+            target.actor.set_position(iconX, iconY);
+            target.actor.set_size(target.icon.width, target.icon.height);
+        }
+        if (this._tooltipTarget)
+            this._positionTooltip(this._tooltipTarget);
     }
 
     _setForecastMode(mode) {
         this._forecastMode = mode;
         this._hourly.visible = mode === 'hourly';
         this._daily.visible = mode === 'daily';
+        this._hideForecastTooltip();
+        for (const target of this._forecastTargets)
+            target.actor.visible = target.mode === mode;
         this._hourlyTab.set_style_class_name(
             `desktop-weather-forecast-tab${mode === 'hourly' ? ' selected' : ''}`);
         this._dailyTab.set_style_class_name(
             `desktop-weather-forecast-tab${mode === 'daily' ? ' selected' : ''}`);
+    }
+
+    _hideForecastTooltip() {
+        this._tooltipTarget = null;
+        this._tooltip.visible = false;
+    }
+
+    _positionTooltip(target) {
+        if (!Main.layoutManager.primaryMonitor)
+            return;
+        const area = global.workspace_manager.get_active_workspace()
+            .get_work_area_for_monitor(Main.layoutManager.primaryIndex);
+        const [, width] = this._tooltip.get_preferred_width(-1);
+        const [, height] = this._tooltip.get_preferred_height(width);
+        const x = Math.max(area.x, Math.min(target.actor.x + (target.actor.width - width) / 2,
+            area.x + area.width - width));
+        let y = target.actor.y - height - 4;
+        if (y < area.y)
+            y = target.actor.y + target.actor.height + 4;
+        this._tooltip.set_position(x, Math.max(area.y, Math.min(y, area.y + area.height - height)));
+    }
+
+    _addForecastTarget(icon, mode, conditions) {
+        const actor = new St.Widget({
+            reactive: true,
+            track_hover: true,
+            visible: mode === this._forecastMode,
+            accessible_name: conditions,
+        });
+        const target = {icon, actor, mode};
+        this._forecastTargets.push(target);
+        global.window_group.add_child(actor);
+        icon.connect('notify::allocation', () => this._position());
+        actor.connect('notify::hover', () => {
+            if (actor.hover && actor.visible) {
+                this._tooltipTarget = target;
+                this._tooltip.text = conditions;
+                this._tooltip.visible = true;
+                this._positionTooltip(target);
+            } else if (this._tooltipTarget === target) {
+                this._hideForecastTooltip();
+            }
+        });
+    }
+
+    _clearForecastTargets(mode) {
+        if (this._tooltipTarget?.mode === mode)
+            this._hideForecastTooltip();
+        const removed = this._forecastTargets.filter(target => target.mode === mode);
+        this._forecastTargets = this._forecastTargets.filter(target => target.mode !== mode);
+        for (const target of removed)
+            target.actor.destroy();
     }
 
     _configPath() {
@@ -386,6 +459,7 @@ export default class DesktopWeatherExtension extends Extension {
     }
 
     _updateHourly(hours) {
+        this._clearForecastTargets('hourly');
         this._hourly.destroy_all_children();
         for (const hour of hours) {
             const column = new St.BoxLayout({
@@ -399,11 +473,13 @@ export default class DesktopWeatherExtension extends Extension {
                 text: hour.time,
                 x_align: Clutter.ActorAlign.CENTER,
             }));
-            column.add_child(new St.Icon({
+            const icon = new St.Icon({
                 style_class: 'desktop-weather-hour-icon',
                 icon_name: this._weatherIconForConditions(hour.conditions),
                 x_align: Clutter.ActorAlign.CENTER,
-            }));
+            });
+            column.add_child(icon);
+            this._addForecastTarget(icon, 'hourly', hour.conditions);
             column.add_child(new St.Label({
                 style_class: 'desktop-weather-hour-temperature',
                 text: `${Math.round(hour.temperature)}°`,
@@ -411,9 +487,11 @@ export default class DesktopWeatherExtension extends Extension {
             }));
             this._hourly.add_child(column);
         }
+        this._restackControls();
     }
 
     _updateDaily(days) {
+        this._clearForecastTargets('daily');
         this._daily.destroy_all_children();
         for (const day of days) {
             const [year, month, date] = day.date.split('-').map(Number);
@@ -431,11 +509,13 @@ export default class DesktopWeatherExtension extends Extension {
                 text: label,
                 x_align: Clutter.ActorAlign.CENTER,
             }));
-            column.add_child(new St.Icon({
+            const icon = new St.Icon({
                 style_class: 'desktop-weather-hour-icon',
                 icon_name: this._weatherIconForConditions(day.conditions),
                 x_align: Clutter.ActorAlign.CENTER,
-            }));
+            });
+            column.add_child(icon);
+            this._addForecastTarget(icon, 'daily', day.conditions);
             column.add_child(new St.Label({
                 style_class: 'desktop-weather-hour-temperature',
                 text: `${high}°`,
@@ -448,6 +528,7 @@ export default class DesktopWeatherExtension extends Extension {
             }));
             this._daily.add_child(column);
         }
+        this._restackControls();
     }
 
     _weatherIconForConditions(conditions) {
@@ -500,8 +581,10 @@ export default class DesktopWeatherExtension extends Extension {
         global.display.disconnect(this._restackedId);
         global.window_manager.disconnect(this._windowMappedId);
         this._widget.disconnect(this._allocationChangedId);
-        for (const button of [this._settingsButton, this._hourlyTab, this._dailyTab])
-            button.destroy();
+        for (const target of this._forecastTargets)
+            target.actor.destroy();
+        for (const actor of [this._settingsButton, this._hourlyTab, this._dailyTab, this._tooltip])
+            actor.destroy();
         this._widget.destroy();
         this._widget = null;
     }

@@ -13,10 +13,26 @@ class Actor {
     constructor(properties = {}) {
         Object.assign(this, properties);
         this.children = [];
+        this.handlers = new Map();
     }
 
     add_child(child) {
         this.children.push(child);
+    }
+
+    connect(signal, callback) {
+        this.handlers.set(signal, callback);
+    }
+
+    emit(signal) {
+        this.handlers.get(signal)?.();
+    }
+
+    destroy() {
+        const index = windowGroup.children.indexOf(this);
+        if (index >= 0)
+            windowGroup.children.splice(index, 1);
+        this.destroyed = true;
     }
 
     destroy_all_children() {
@@ -26,11 +42,34 @@ class Actor {
     set_style_class_name(name) {
         this.style_class = name;
     }
+
+    set_position(x, y) {
+        Object.assign(this, {x, y});
+    }
+
+    set_size(width, height) {
+        Object.assign(this, {width, height});
+    }
+
+    get_transformed_position() {
+        return [this.x ?? 0, this.y ?? 0];
+    }
+
+    get_preferred_width() {
+        return [80, 80];
+    }
+
+    get_preferred_height() {
+        return [20, 20];
+    }
 }
 
 const background = new Actor();
 const windowGroup = {
     children: [],
+    add_child(child) {
+        this.children.push(child);
+    },
     get_children() {
         return [...this.children];
     },
@@ -40,14 +79,27 @@ const windowGroup = {
     },
 };
 const Widget = new Function('Extension', 'St', 'Clutter', 'GLib', 'Meta', 'Main', 'global', source)(
-    class {}, {BoxLayout: Actor, Label: Actor, Icon: Actor}, {ActorAlign: {CENTER: 0}}, GLib,
-    {WindowType: {DESKTOP: 0}}, {layoutManager: {_backgroundGroup: background}}, {window_group: windowGroup});
+    class {}, {BoxLayout: Actor, Label: Actor, Icon: Actor, Widget: Actor}, {ActorAlign: {CENTER: 0}}, GLib,
+    {WindowType: {DESKTOP: 0}}, {layoutManager: {_backgroundGroup: background, primaryIndex: 0, primaryMonitor: {}}},
+    {
+        window_group: windowGroup,
+        workspace_manager: {get_active_workspace: () => ({
+            get_work_area_for_monitor: () => ({x: 0, y: 0, width: 300, height: 200}),
+        })},
+    });
 const widget = new Widget();
 widget._hourly = new Actor();
 widget._daily = new Actor();
 widget._hourlyTab = new Actor();
 widget._dailyTab = new Actor();
 widget._settingsButton = new Actor();
+widget._forecastTargets = [];
+widget._tooltip = new Actor({visible: false});
+widget._forecastMode = 'hourly';
+widget._widget = new Actor({width: 200});
+widget._settingsButtonSlot = new Actor({width: 20, height: 18});
+widget._hourlyTabSlot = new Actor({width: 72, height: 24});
+widget._dailyTabSlot = new Actor({width: 72, height: 24});
 const assert = (condition, message) => {
     if (!condition)
         throw new Error(message);
@@ -58,7 +110,7 @@ const desktop = {mapped: true, meta_window: {get_window_type: () => 1, customJS_
 const secondDesktop = {mapped: true, meta_window: {get_window_type: () => 1, customJS_ding: {keepAtBottom: true}}};
 const desktopWindow = {mapped: true, meta_window: {get_window_type: () => 0}};
 const application = {mapped: true, meta_window: {get_window_type: () => 1}};
-const controls = [widget._settingsButton, widget._hourlyTab, widget._dailyTab];
+const controls = [widget._settingsButton, widget._hourlyTab, widget._dailyTab, widget._tooltip];
 windowGroup.children = [background, hiddenApp, desktop, secondDesktop, desktopWindow, application, ...controls];
 widget._restackControls();
 assert(windowGroup.children.indexOf(desktopWindow) < windowGroup.children.indexOf(widget._settingsButton) &&
@@ -86,8 +138,28 @@ const rain = widget._hourly.children[1];
 assert(rain.children[0].text === '01:00', 'Hour label is incorrect');
 assert(rain.children[1].icon_name === 'weather-showers-symbolic', 'Forecast icon is incorrect');
 assert(rain.children[2].text === '-1°', 'Forecast temperature is incorrect');
+const hourlyTarget = widget._forecastTargets[1];
+assert(hourlyTarget.actor.reactive && hourlyTarget.actor.visible, 'Hourly icon must have a hover target');
+assert(windowGroup.children.indexOf(hourlyTarget.actor) < windowGroup.children.indexOf(application) &&
+    windowGroup.children.indexOf(widget._tooltip) < windowGroup.children.indexOf(application),
+    'Forecast targets and tooltip must remain below application windows');
+Object.assign(hourlyTarget.icon, {x: 290, y: 40, width: 20, height: 20});
+hourlyTarget.icon.emit('notify::allocation');
+assert(hourlyTarget.actor.x === 290 && hourlyTarget.actor.y === 40 &&
+    hourlyTarget.actor.width === 20 && hourlyTarget.actor.height === 20,
+    'Hover target must follow the forecast icon allocation');
+hourlyTarget.actor.hover = true;
+hourlyTarget.actor.emit('notify::hover');
+assert(widget._tooltip.visible && widget._tooltip.text === 'Rain' && widget._tooltip.x === 220,
+    'Hourly tooltip must show the forecast and fit within the work area');
+hourlyTarget.actor.hover = false;
+hourlyTarget.actor.emit('notify::hover');
+assert(!widget._tooltip.visible, 'Tooltip must hide when the pointer leaves');
+hourlyTarget.actor.hover = true;
+hourlyTarget.actor.emit('notify::hover');
 widget._updateHourly(hours);
-assert(widget._hourly.children.length === 6, 'Refreshing duplicated hourly columns');
+assert(widget._hourly.children.length === 6 && hourlyTarget.actor.destroyed && !widget._tooltip.visible &&
+    widget._forecastTargets.length === 6, 'Refreshing must replace hover targets and hide stale tooltips');
 
 const days = Array.from({length: 6}, (_, i) => ({
     date: `2026-01-${String(i + 1).padStart(2, '0')}`,
@@ -105,8 +177,19 @@ assert(rainyDay.children[2].text === '11°' && rainyDay.children[3].text === '-1
 widget._setForecastMode('daily');
 assert(widget._daily.visible && !widget._hourly.visible && widget._dailyTab.style_class.includes('selected'),
     'Daily tab did not switch views');
+const dailyTarget = widget._forecastTargets.find(target => target.mode === 'daily' && target.icon === rainyDay.children[1]);
+assert(dailyTarget.actor.visible && widget._forecastTargets.filter(target => target.mode === 'hourly')
+    .every(target => !target.actor.visible), 'Only daily hover targets should be visible');
+Object.assign(dailyTarget.actor, {x: 10, y: 5, width: 20, height: 20, hover: true});
+dailyTarget.actor.emit('notify::hover');
+assert(widget._tooltip.visible && widget._tooltip.text === 'Rain' && widget._tooltip.y === 29,
+    'Daily tooltip must show its forecast below an icon near the top edge');
+widget._setForecastMode('hourly');
+assert(!widget._tooltip.visible && !dailyTarget.actor.visible, 'Switching tabs must hide the daily tooltip');
+widget._setForecastMode('daily');
 widget._updateDaily(days);
-assert(widget._daily.visible && widget._daily.children.length === 6, 'Refreshing changed or duplicated the daily view');
+assert(widget._daily.visible && widget._daily.children.length === 6 && dailyTarget.actor.destroyed &&
+    widget._forecastTargets.length === 12, 'Refreshing must replace daily hover targets');
 widget._setForecastMode('hourly');
 assert(widget._hourly.visible && !widget._daily.visible && widget._hourlyTab.style_class.includes('selected'),
     'Hourly tab did not switch views');

@@ -85,6 +85,15 @@
     font-size: 13px;
 }
 
+.desktop-weather-tooltip {
+    background-color: rgba(25, 30, 40, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    padding: 5px 8px;
+    color: #ffffff;
+    font-size: 12px;
+}
+
 .desktop-weather-status-row {
     padding-top: 10px;
 }
