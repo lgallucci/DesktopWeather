@@ -3,11 +3,15 @@
 A weather widget for the GNOME desktop on Zorin OS. A small GNOME Shell
 extension displays the widget above the wallpaper and behind application
 windows; a C#/.NET process retrieves current weather from Open-Meteo. A gear
-button in the widget opens settings for the city and temperature units; clicks
-elsewhere on the weather display pass through to the desktop.
+button in the widget opens settings for the city and temperature units, and
+tabs switch between hourly and daily forecasts. Clicks elsewhere on the
+weather display pass through to the desktop.
 
 The extension currently targets GNOME Shell 46 (Zorin OS 18). It appears in
 the upper-right corner of the primary monitor and updates every 15 minutes.
+The hourly forecast shows the previous hour, the current hour, and the next
+four hours, using the configured location's local time and temperature unit.
+The daily forecast shows the next six days, starting tomorrow, with daily highs and lows.
 It is not a floating or always-on-top window. Desktop icon extensions may
 overlap the widget.
 
@@ -62,7 +66,7 @@ application is possible, but is not needed for this integrated UI. If
 `$XDG_CONFIG_HOME/desktop-weather/config.json` instead.
 
 Weather requests send the configured location to Open-Meteo. Current
-conditions are model-based rather than necessarily a local observation.
+conditions and forecasts are model-based rather than necessarily local observations.
 If an update fails, the last reading remains visible with an error status.
 Inspect details with `journalctl --user -b /usr/bin/gnome-shell`.
 The backend can also be run directly to diagnose configuration or network
@@ -74,10 +78,12 @@ dotnet run --project src/DesktopWeather.Backend
 
 ## Checks
 
-Run the backend configuration and widget reload checks with:
+Run the backend configuration, forecast, and widget checks with:
 
 ```sh
 dotnet build src/DesktopWeather.Backend -c Release
 python3 tests/test_backend.py
+dotnet run --project tests/BackendForecastChecks
 gjs -m tests/test_reload.js
+gjs -m tests/test_hourly.js
 ```

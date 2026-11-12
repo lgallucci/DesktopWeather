@@ -56,6 +56,26 @@ export default class DesktopWeatherExtension extends Extension {
         for (const actor of [this._location, this._currentWeather, this._details])
             this._widget.add_child(actor);
 
+        this._forecastMode = 'hourly';
+        const forecastTabs = new St.BoxLayout({style_class: 'desktop-weather-forecast-tabs'});
+        this._hourlyTabSlot = new St.Widget({width: 72, height: 24});
+        this._dailyTabSlot = new St.Widget({width: 72, height: 24});
+        forecastTabs.add_child(this._hourlyTabSlot);
+        forecastTabs.add_child(this._dailyTabSlot);
+        this._widget.add_child(forecastTabs);
+
+        this._hourly = new St.BoxLayout({
+            style_class: 'desktop-weather-hourly',
+            x_expand: true,
+        });
+        this._widget.add_child(this._hourly);
+        this._daily = new St.BoxLayout({
+            style_class: 'desktop-weather-hourly',
+            x_expand: true,
+            visible: false,
+        });
+        this._widget.add_child(this._daily);
+
         this._statusRow = new St.BoxLayout({
             style_class: 'desktop-weather-status-row',
             x_expand: true,
@@ -83,13 +103,35 @@ export default class DesktopWeatherExtension extends Extension {
             }),
         });
         this._settingsButton.connect('clicked', () => this._openSettings());
+        this._hourlyTab = new St.Button({
+            label: 'Hourly',
+            width: 72,
+            height: 24,
+            can_focus: true,
+            reactive: true,
+            track_hover: true,
+        });
+        this._dailyTab = new St.Button({
+            label: 'Daily',
+            width: 72,
+            height: 24,
+            can_focus: true,
+            reactive: true,
+            track_hover: true,
+        });
+        this._hourlyTab.connect('clicked', () => this._setForecastMode('hourly'));
+        this._dailyTab.connect('clicked', () => this._setForecastMode('daily'));
+        this._setForecastMode('hourly');
 
         // Keep the widget with the wallpaper, outside the compositor's window stack.
         Main.layoutManager._backgroundGroup.add_child(this._widget);
-        Main.uiGroup.add_child(this._settingsButton);
+        for (const button of [this._settingsButton, this._hourlyTab, this._dailyTab])
+            Main.uiGroup.add_child(button);
         this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => this._position());
         this._workareasChangedId = global.display.connect('workareas-changed', () => this._position());
         this._allocationChangedId = this._widget.connect('notify::allocation', () => this._position());
+        for (const slot of [this._settingsButtonSlot, this._hourlyTabSlot, this._dailyTabSlot])
+            slot.connect('notify::allocation', () => this._position());
         this._position();
         this._refresh();
         this._timerId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, REFRESH_SECONDS, () => {
@@ -106,10 +148,26 @@ export default class DesktopWeatherExtension extends Extension {
         const area = global.workspace_manager.get_active_workspace().get_work_area_for_monitor(index);
         const x = Math.max(area.x, area.x + area.width - this._widget.width - 24);
         this._widget.set_position(x, area.y + 24);
-        const [buttonX, buttonY] = this._settingsButtonSlot.get_transformed_position();
-        this._settingsButton.set_position(
-            buttonX + (this._settingsButtonSlot.width - this._settingsButton.width) / 2,
-            buttonY + (this._settingsButtonSlot.height - this._settingsButton.height) / 2);
+        for (const [slot, button] of [
+            [this._settingsButtonSlot, this._settingsButton],
+            [this._hourlyTabSlot, this._hourlyTab],
+            [this._dailyTabSlot, this._dailyTab],
+        ]) {
+            const [buttonX, buttonY] = slot.get_transformed_position();
+            button.set_position(
+                buttonX + (slot.width - button.width) / 2,
+                buttonY + (slot.height - button.height) / 2);
+        }
+    }
+
+    _setForecastMode(mode) {
+        this._forecastMode = mode;
+        this._hourly.visible = mode === 'hourly';
+        this._daily.visible = mode === 'daily';
+        this._hourlyTab.set_style_class_name(
+            `desktop-weather-forecast-tab${mode === 'hourly' ? ' selected' : ''}`);
+        this._dailyTab.set_style_class_name(
+            `desktop-weather-forecast-tab${mode === 'daily' ? ' selected' : ''}`);
     }
 
     _configPath() {
@@ -270,11 +328,24 @@ export default class DesktopWeatherExtension extends Extension {
                         throw new Error(stderr.trim() || `Backend exited with status ${source.get_exit_status()}`);
 
                     const weather = JSON.parse(stdout);
+                    if (!Array.isArray(weather.hourly) || weather.hourly.length !== 6 ||
+                        weather.hourly.some(hour => typeof hour?.time !== 'string' ||
+                            typeof hour.temperature !== 'number' || !Number.isFinite(hour.temperature) ||
+                            typeof hour.conditions !== 'string'))
+                        throw new Error('Backend returned an invalid hourly forecast');
+                    if (!Array.isArray(weather.daily) || weather.daily.length !== 6 ||
+                        weather.daily.some(day => typeof day?.date !== 'string' ||
+                            !/^\d{4}-\d{2}-\d{2}$/.test(day.date) ||
+                            !Number.isFinite(day.high) || !Number.isFinite(day.low) ||
+                            typeof day.conditions !== 'string'))
+                        throw new Error('Backend returned an invalid daily forecast');
                     this._location.text = weather.location;
                     this._temperature.text = `${Math.round(weather.temperature)}°${weather.temperatureUnit}`;
                     this._conditions.text = weather.conditions;
                     this._weatherIcon.icon_name = this._weatherIconForConditions(weather.conditions);
                     this._details.text = `Feels like ${Math.round(weather.feelsLike)}° · Humidity ${weather.humidity}%\nWind ${Math.round(weather.windSpeed)} ${weather.windUnit}`;
+                    this._updateHourly(weather.hourly);
+                    this._updateDaily(weather.daily);
                     this._status.text = 'Open-Meteo · Updated ' +
                         GLib.DateTime.new_now_local().format('%H:%M');
                     this._hasWeather = true;
@@ -288,6 +359,71 @@ export default class DesktopWeatherExtension extends Extension {
             });
         } catch (error) {
             this._showError(error);
+        }
+    }
+
+    _updateHourly(hours) {
+        this._hourly.destroy_all_children();
+        for (const hour of hours) {
+            const column = new St.BoxLayout({
+                style_class: 'desktop-weather-hour',
+                vertical: true,
+                x_expand: true,
+                accessible_name: `${hour.time}, ${hour.conditions}, ${Math.round(hour.temperature)} degrees`,
+            });
+            column.add_child(new St.Label({
+                style_class: 'desktop-weather-hour-time',
+                text: hour.time,
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            column.add_child(new St.Icon({
+                style_class: 'desktop-weather-hour-icon',
+                icon_name: this._weatherIconForConditions(hour.conditions),
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            column.add_child(new St.Label({
+                style_class: 'desktop-weather-hour-temperature',
+                text: `${Math.round(hour.temperature)}°`,
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            this._hourly.add_child(column);
+        }
+    }
+
+    _updateDaily(days) {
+        this._daily.destroy_all_children();
+        for (const day of days) {
+            const [year, month, date] = day.date.split('-').map(Number);
+            const label = GLib.DateTime.new_utc(year, month, date, 12, 0, 0).format('%a %d');
+            const high = Math.round(day.high);
+            const low = Math.round(day.low);
+            const column = new St.BoxLayout({
+                style_class: 'desktop-weather-hour',
+                vertical: true,
+                x_expand: true,
+                accessible_name: `${day.date}, ${day.conditions}, high ${high} degrees, low ${low} degrees`,
+            });
+            column.add_child(new St.Label({
+                style_class: 'desktop-weather-hour-time',
+                text: label,
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            column.add_child(new St.Icon({
+                style_class: 'desktop-weather-hour-icon',
+                icon_name: this._weatherIconForConditions(day.conditions),
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            column.add_child(new St.Label({
+                style_class: 'desktop-weather-hour-temperature',
+                text: `${high}°`,
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            column.add_child(new St.Label({
+                style_class: 'desktop-weather-hour-time',
+                text: `${low}°`,
+                x_align: Clutter.ActorAlign.CENTER,
+            }));
+            this._daily.add_child(column);
         }
     }
 
@@ -339,7 +475,8 @@ export default class DesktopWeatherExtension extends Extension {
         Main.layoutManager.disconnect(this._monitorsChangedId);
         global.display.disconnect(this._workareasChangedId);
         this._widget.disconnect(this._allocationChangedId);
-        this._settingsButton.destroy();
+        for (const button of [this._settingsButton, this._hourlyTab, this._dailyTab])
+            button.destroy();
         this._widget.destroy();
         this._widget = null;
     }

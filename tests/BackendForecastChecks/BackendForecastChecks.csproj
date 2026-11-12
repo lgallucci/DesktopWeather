@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/DesktopWeather.Backend/OpenMeteoClient.cs" Link="OpenMeteoClient.cs" />
+    <Compile Include="../../src/DesktopWeather.Backend/WeatherModels.cs" Link="WeatherModels.cs" />
+    <Compile Include="../../src/DesktopWeather.Backend/WeatherService.cs" Link="WeatherService.cs" />
+    <Compile Include="../../src/DesktopWeather.Backend/WeatherCodeDescription.cs" Link="WeatherCodeDescription.cs" />
+  </ItemGroup>
+</Project>

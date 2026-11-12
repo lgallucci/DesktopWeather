@@ -10,7 +10,8 @@ internal sealed class WeatherService
     public async Task<WidgetWeather> GetCurrentWeatherAsync(WeatherSettings settings)
     {
         var location = await _openMeteoClient.FindLocationAsync(settings.City);
-        var current = await _openMeteoClient.GetCurrentConditionsAsync(location, settings.Unit);
+        var forecast = await _openMeteoClient.GetForecastAsync(location, settings.Unit);
+        var current = forecast.Current;
         var place = string.Join(", ", new[] { location.Name, location.Admin1, location.Country }
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.OrdinalIgnoreCase));
@@ -23,6 +24,10 @@ internal sealed class WeatherService
             current.WindSpeed,
             settings.Unit == "fahrenheit" ? "F" : "C",
             settings.Unit == "fahrenheit" ? "mph" : "km/h",
-            WeatherCodeDescription.Describe(current.WeatherCode));
+            WeatherCodeDescription.Describe(current.WeatherCode),
+            forecast.Hourly.Select(hour => new WidgetHourlyForecast(
+                hour.Time, hour.Temperature, WeatherCodeDescription.Describe(hour.WeatherCode))).ToArray(),
+            forecast.Daily.Select(day => new WidgetDailyForecast(
+                day.Date, day.High, day.Low, WeatherCodeDescription.Describe(day.WeatherCode))).ToArray());
     }
 }

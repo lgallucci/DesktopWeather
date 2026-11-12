@@ -40,6 +40,51 @@
     font-size: 13px;
 }
 
+.desktop-weather-forecast-tabs {
+    padding-top: 12px;
+    spacing: 4px;
+}
+
+.desktop-weather-forecast-tab {
+    width: 72px;
+    height: 24px;
+    border-radius: 6px;
+    color: #c5ceda;
+    font-size: 12px;
+}
+
+.desktop-weather-forecast-tab.selected {
+    background-color: rgba(98, 160, 234, 0.35);
+    color: #ffffff;
+}
+
+.desktop-weather-forecast-tab:hover,
+.desktop-weather-forecast-tab:focus {
+    background-color: rgba(255, 255, 255, 0.14);
+}
+
+.desktop-weather-hourly {
+    padding-top: 8px;
+    spacing: 5px;
+}
+
+.desktop-weather-hour {
+    spacing: 4px;
+}
+
+.desktop-weather-hour-time {
+    color: #c5ceda;
+    font-size: 11px;
+}
+
+.desktop-weather-hour-icon {
+    icon-size: 20px;
+}
+
+.desktop-weather-hour-temperature {
+    font-size: 13px;
+}
+
 .desktop-weather-status-row {
     padding-top: 10px;
 }
