@@ -6,6 +6,7 @@ windows; a C#/.NET process retrieves current weather from Open-Meteo. A gear
 button in the widget opens settings for the city and temperature units, and
 tabs switch between hourly and daily forecasts. Clicks elsewhere on the
 weather display pass through to the desktop.
+Controls are hidden when an application window overlaps them.
 
 The extension currently targets GNOME Shell 46 (Zorin OS 18). It appears in
 the upper-right corner of the primary monitor and updates every 15 minutes.
