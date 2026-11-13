@@ -4,6 +4,7 @@ import Clutter from 'gi://Clutter';
 import Meta from 'gi://Meta';
 import St from 'gi://St';
 
+import {CheckBox} from 'resource:///org/gnome/shell/ui/checkBox.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
@@ -14,6 +15,12 @@ export default class DesktopWeatherExtension extends Extension {
     enable() {
         this._enabled = true;
         this._hasWeather = false;
+        this._colorIcons = false;
+        try {
+            this._colorIcons = this._loadSettings().colorIcons;
+        } catch (error) {
+            console.error(`Desktop Weather: Could not load settings: ${error.message}`);
+        }
         this._widget = new St.BoxLayout({
             style_class: 'desktop-weather',
             vertical: true,
@@ -32,7 +39,7 @@ export default class DesktopWeatherExtension extends Extension {
         });
         this._details = new St.Label({style_class: 'desktop-weather-details', text: ''});
         this._weatherIcon = new St.Icon({
-            icon_name: 'weather-overcast-symbolic',
+            icon_name: this._weatherIconForConditions('Overcast', 'large'),
             style_class: 'desktop-weather-icon',
             y_align: Clutter.ActorAlign.CENTER,
         });
@@ -241,7 +248,7 @@ export default class DesktopWeatherExtension extends Extension {
             visible: mode === this._forecastMode,
             accessible_name: conditions,
         });
-        const target = {icon, actor, mode};
+        const target = {icon, actor, mode, conditions};
         this._forecastTargets.push(target);
         global.window_group.add_child(actor);
         icon.connect('notify::allocation', () => this._position());
@@ -276,7 +283,7 @@ export default class DesktopWeatherExtension extends Extension {
     _loadSettings() {
         const path = this._configPath();
         if (!GLib.file_test(path, GLib.FileTest.EXISTS))
-            return {city: 'London, United Kingdom', unit: 'celsius'};
+            return {city: 'London, United Kingdom', unit: 'celsius', colorIcons: false};
 
         const [, contents] = GLib.file_get_contents(path);
         const settings = JSON.parse(new TextDecoder().decode(contents));
@@ -284,7 +291,9 @@ export default class DesktopWeatherExtension extends Extension {
             throw new Error('City must contain at least two characters.');
         if (settings.unit !== 'celsius' && settings.unit !== 'fahrenheit')
             throw new Error("Unit must be 'celsius' or 'fahrenheit'.");
-        return {city: settings.city, unit: settings.unit};
+        if (settings.colorIcons !== undefined && typeof settings.colorIcons !== 'boolean')
+            throw new Error('Color weather icons must be true or false.');
+        return {city: settings.city, unit: settings.unit, colorIcons: settings.colorIcons ?? false};
     }
 
     _openSettings() {
@@ -294,7 +303,7 @@ export default class DesktopWeatherExtension extends Extension {
         if (this._settingsOpen)
             return;
 
-        let settings = {city: 'London, United Kingdom', unit: 'celsius'};
+        let settings = {city: 'London, United Kingdom', unit: 'celsius', colorIcons: false};
         this._settingsError.text = '';
         try {
             settings = this._loadSettings();
@@ -305,6 +314,7 @@ export default class DesktopWeatherExtension extends Extension {
 
         this._cityEntry.set_text(settings.city);
         this._unit = settings.unit;
+        this._colorIconsCheck.checked = settings.colorIcons;
         this._updateUnitButtons();
         this._settingsOpen = this._settingsDialog.open();
         if (!this._settingsOpen)
@@ -360,6 +370,8 @@ export default class DesktopWeatherExtension extends Extension {
         unitRow.add_child(this._celsiusButton);
         unitRow.add_child(this._fahrenheitButton);
         dialog.contentLayout.add_child(unitRow);
+        this._colorIconsCheck = new CheckBox('Use color weather icons');
+        dialog.contentLayout.add_child(this._colorIconsCheck);
         this._settingsError = new St.Label({style_class: 'desktop-weather-settings-error', text: ''});
         dialog.contentLayout.add_child(this._settingsError);
 
@@ -379,6 +391,7 @@ export default class DesktopWeatherExtension extends Extension {
 
     _saveSettings() {
         const city = this._cityEntry.get_text().trim();
+        const colorIcons = this._colorIconsCheck.checked;
         if (city.length < 2) {
             this._settingsError.text = 'City must contain at least two characters.';
             return;
@@ -388,7 +401,8 @@ export default class DesktopWeatherExtension extends Extension {
             const path = this._configPath();
             const directory = GLib.path_get_dirname(path);
             GLib.mkdir_with_parents(directory, 0o700);
-            GLib.file_set_contents(path, JSON.stringify({city, unit: this._unit}, null, 2));
+            GLib.file_set_contents(path, JSON.stringify({city, unit: this._unit, colorIcons}, null, 2));
+            this._setColorIcons(colorIcons);
             this._closeSettings();
             if (this._process) {
                 this._process.force_exit();
@@ -438,7 +452,8 @@ export default class DesktopWeatherExtension extends Extension {
                     this._location.text = weather.location;
                     this._temperature.text = `${Math.round(weather.temperature)}°${weather.temperatureUnit}`;
                     this._conditions.text = weather.conditions;
-                    this._weatherIcon.icon_name = this._weatherIconForConditions(weather.conditions);
+                    this._currentConditions = weather.conditions;
+                    this._weatherIcon.icon_name = this._weatherIconForConditions(weather.conditions, 'large');
                     this._details.text = `Feels like ${Math.round(weather.feelsLike)}° · Humidity ${weather.humidity}%\nWind ${Math.round(weather.windSpeed)} ${weather.windUnit}`;
                     this._updateHourly(weather.hourly);
                     this._updateDaily(weather.daily);
@@ -531,32 +546,46 @@ export default class DesktopWeatherExtension extends Extension {
         this._restackControls();
     }
 
-    _weatherIconForConditions(conditions) {
+    _weatherIconForConditions(conditions, size = 'small') {
         const description = conditions.toLowerCase();
+        let icon;
         if (description.includes('thunderstorm'))
-            return 'weather-storm-symbolic';
-        if (description.includes('snow'))
-            return 'weather-snow-symbolic';
-        if (description.includes('fog'))
-            return 'weather-fog-symbolic';
-        if (description.includes('drizzle'))
-            return 'weather-showers-scattered-symbolic';
-        if (description.includes('rain'))
-            return 'weather-showers-symbolic';
-        if (description.includes('overcast'))
-            return 'weather-overcast-symbolic';
-        if (description.includes('cloud'))
-            return 'weather-few-clouds-symbolic';
-        if (description.includes('clear'))
-            return 'weather-clear-symbolic';
-        return 'weather-severe-alert-symbolic';
+            icon = 'weather-storm';
+        else if (description.includes('snow'))
+            icon = 'weather-snow';
+        else if (description.includes('fog'))
+            icon = 'weather-fog';
+        else if (description.includes('drizzle'))
+            icon = 'weather-showers-scattered';
+        else if (description.includes('rain'))
+            icon = 'weather-showers';
+        else if (description.includes('overcast'))
+            icon = 'weather-overcast';
+        else if (description.includes('cloud'))
+            icon = 'weather-few-clouds';
+        else if (description.includes('clear'))
+            icon = 'weather-clear';
+        else
+            icon = 'weather-severe-alert';
+
+        return this._colorIcons ? `${icon}-${size}` : `${icon}-symbolic`;
+    }
+
+    _setColorIcons(enabled) {
+        this._colorIcons = enabled;
+        if (this._weatherIcon)
+            this._weatherIcon.icon_name = this._weatherIconForConditions(
+                this._currentConditions ?? 'Overcast', 'large');
+        for (const target of this._forecastTargets)
+            target.icon.icon_name = this._weatherIconForConditions(target.conditions);
     }
 
     _showError(error) {
         console.error(`Desktop Weather: ${error.message}`);
         if (!this._hasWeather) {
             this._conditions.text = 'Weather unavailable';
-            this._weatherIcon.icon_name = 'weather-severe-alert-symbolic';
+            this._currentConditions = 'Severe alert';
+            this._weatherIcon.icon_name = this._weatherIconForConditions(this._currentConditions, 'large');
         }
         this._status.text = 'Update failed; see GNOME Shell logs';
     }

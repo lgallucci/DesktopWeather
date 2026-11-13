@@ -174,6 +174,18 @@ assert(rainyDay.children[0].text.includes('02'), 'Daily date label is incorrect'
 assert(rainyDay.children[1].icon_name === 'weather-showers-symbolic', 'Daily icon is incorrect');
 assert(rainyDay.children[2].text === '11°' && rainyDay.children[3].text === '-1°',
     'Daily high and low are incorrect');
+widget._weatherIcon = new Actor();
+widget._currentConditions = 'Rain';
+widget._setColorIcons(true);
+assert(widget._weatherIcon.icon_name === 'weather-showers-large' &&
+    widget._hourly.children[1].children[1].icon_name === 'weather-showers-small' &&
+    rainyDay.children[1].icon_name === 'weather-showers-small',
+    'Enabling color icons must update current and forecast icons');
+widget._setColorIcons(false);
+assert(widget._weatherIcon.icon_name === 'weather-showers-symbolic' &&
+    widget._hourly.children[1].children[1].icon_name === 'weather-showers-symbolic' &&
+    rainyDay.children[1].icon_name === 'weather-showers-symbolic',
+    'Disabling color icons must restore symbolic icons');
 widget._setForecastMode('daily');
 assert(widget._daily.visible && !widget._hourly.visible && widget._dailyTab.style_class.includes('selected'),
     'Daily tab did not switch views');

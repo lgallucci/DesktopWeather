@@ -3,10 +3,10 @@
 A weather widget for the GNOME desktop on Zorin OS. A small GNOME Shell
 extension displays the widget above the wallpaper and behind application
 windows; a C#/.NET process retrieves current weather from Open-Meteo. A gear
-button in the widget opens settings for the city and temperature units, and
-tabs switch between hourly and daily forecasts. Hover over a forecast icon to
-see its weather description. Clicks outside the controls and forecast icons
-pass through to the desktop.
+button in the widget opens settings for the city, temperature units, and
+weather icon style, and tabs switch between hourly and daily forecasts. Hover
+over a forecast icon to see its weather description. Clicks outside the
+controls and forecast icons pass through to the desktop.
 Application windows cover the widget and its controls.
 Control stacking relies on GNOME Shell internals and Zorin desktop icons'
 private window metadata; other desktop configurations may behave differently.
@@ -54,11 +54,14 @@ in Celsius. To change it, create `~/.config/desktop-weather/config.json`:
 ```json
 {
   "city": "Chicago, Illinois",
-  "unit": "fahrenheit"
+  "unit": "fahrenheit",
+  "colorIcons": false
 }
 ```
 
-`unit` must be `celsius` or `fahrenheit`. The city is searched using
+`unit` must be `celsius` or `fahrenheit`. `colorIcons` is optional and defaults
+to `false`; enable it in the widget's settings to use GNOME Weather's colored
+icons instead of symbolic icons. The city is searched using
 [Open-Meteo geocoding](https://open-meteo.com/en/docs/geocoding-api);
 the first match is used, so include a state or country to disambiguate.
 Wind is shown in km/h for Celsius and mph for Fahrenheit. Changes take effect
