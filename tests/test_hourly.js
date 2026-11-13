@@ -130,11 +130,12 @@ assert(windowGroup.children.indexOf(background) < windowGroup.children.indexOf(w
 const hours = Array.from({length: 6}, (_, i) => ({
     time: `${String(i).padStart(2, '0')}:00`,
     temperature: i - 2,
-    conditions: i === 1 ? 'Rain' : i === 2 ? 'Mainly clear' : 'Clear sky',
-    weatherCode: i === 1 ? 61 : i === 2 ? 1 : 0,
+    conditions: i === 1 ? 'Slight rain' : i === 2 ? 'Mainly clear' : i === 3 ? 'Heavy rain' : 'Clear sky',
+    weatherCode: i === 1 ? 61 : i === 2 ? 1 : i === 3 ? 65 : 0,
     isDay: i < 2,
+    windSpeed: i === 3 ? 25.1 : 25,
 }));
-widget._updateHourly(hours);
+widget._updateHourly(hours, 'mph');
 assert(widget._hourly.children.length === 6, 'Expected six hourly forecast columns');
 const rain = widget._hourly.children[1];
 assert(rain.children[0].text === '01:00', 'Hour label is incorrect');
@@ -146,6 +147,17 @@ assert(widget._weatherIconForCode(1, 'large', false) === 'weather-few-clouds-nig
     widget._weatherIconForCode(1, 'large', true) === 'weather-few-clouds-symbolic' &&
     widget._weatherIconForCode(0, 'large', true) === 'weather-clear-symbolic',
     'WMO clear-sky codes must select distinct daytime and nighttime icons');
+assert(widget._hourly.children[3].children[1].icon_name === 'weather-windy-symbolic' &&
+    widget._forecastTargets[3].actor.accessible_name === 'Heavy rain · Wind 25.1 mph',
+    'Hourly wind above 25 mph must use the wind icon and explain it');
+assert(widget._weatherIconForCode(97) === 'weather-storm-symbolic',
+    'Heavy thunderstorm must use the storm icon');
+assert(!widget._isWindy(25, 'mph') && widget._isWindy(25.01, 'mph') &&
+    !widget._isWindy(40.2336, 'km/h') && widget._isWindy(40.234, 'km/h'),
+    'Wind threshold must be strictly above 25 mph in both units');
+assert(widget._weatherIconForCode(19, 'large', true, true) === 'weather-tornado-symbolic' &&
+    widget._weatherIconForCode(61, 'large', true, true) === 'weather-windy-symbolic',
+    'Tornado must take precedence over wind, and wind over other weather');
 const hourlyTarget = widget._forecastTargets[1];
 assert(hourlyTarget.actor.reactive && hourlyTarget.actor.visible, 'Hourly icon must have a hover target');
 assert(windowGroup.children.indexOf(hourlyTarget.actor) < windowGroup.children.indexOf(application) &&
@@ -158,14 +170,14 @@ assert(hourlyTarget.actor.x === 290 && hourlyTarget.actor.y === 40 &&
     'Hover target must follow the forecast icon allocation');
 hourlyTarget.actor.hover = true;
 hourlyTarget.actor.emit('notify::hover');
-assert(widget._tooltip.visible && widget._tooltip.text === 'Rain' && widget._tooltip.x === 220,
+assert(widget._tooltip.visible && widget._tooltip.text === 'Slight rain' && widget._tooltip.x === 220,
     'Hourly tooltip must show the forecast and fit within the work area');
 hourlyTarget.actor.hover = false;
 hourlyTarget.actor.emit('notify::hover');
 assert(!widget._tooltip.visible, 'Tooltip must hide when the pointer leaves');
 hourlyTarget.actor.hover = true;
 hourlyTarget.actor.emit('notify::hover');
-widget._updateHourly(hours);
+widget._updateHourly(hours, 'mph');
 assert(widget._hourly.children.length === 6 && hourlyTarget.actor.destroyed && !widget._tooltip.visible &&
     widget._forecastTargets.length === 6, 'Refreshing must replace hover targets and hide stale tooltips');
 
@@ -173,29 +185,36 @@ const days = Array.from({length: 6}, (_, i) => ({
     date: `2026-01-${String(i + 1).padStart(2, '0')}`,
     high: i + 10,
     low: i - 2,
-    conditions: i === 1 ? 'Rain' : 'Clear sky',
+    conditions: i === 1 ? 'Slight rain' : 'Clear sky',
     weatherCode: i === 1 ? 61 : 0,
+    windSpeedMax: i === 2 ? 41 : 40,
 }));
-widget._updateDaily(days);
+widget._updateDaily(days, 'km/h');
 assert(widget._daily.children.length === 6, 'Expected six daily forecast columns');
 const rainyDay = widget._daily.children[1];
 assert(rainyDay.children[0].text.includes('02'), 'Daily date label is incorrect');
 assert(rainyDay.children[1].icon_name === 'weather-showers-symbolic', 'Daily icon is incorrect');
 assert(rainyDay.children[2].text === '11°' && rainyDay.children[3].text === '-1°',
     'Daily high and low are incorrect');
+assert(widget._daily.children[2].children[1].icon_name === 'weather-windy-symbolic' &&
+    widget._forecastTargets[8].actor.accessible_name === 'Clear sky · Max wind 41 km/h',
+    'Daily wind icon must use the daily maximum wind speed');
 widget._weatherIcon = new Actor();
-widget._currentWeatherCode = 61;
+widget._currentWeatherCode = 19;
 widget._currentIsDay = false;
+widget._currentIsWindy = true;
 widget._setColorIcons(true);
-assert(widget._weatherIcon.icon_name === 'weather-showers-large' &&
+assert(widget._weatherIcon.icon_name === 'weather-tornado-large' &&
     widget._hourly.children[1].children[1].icon_name === 'weather-showers-small' &&
     widget._hourly.children[2].children[1].icon_name === 'weather-few-clouds-night-small' &&
+    widget._hourly.children[3].children[1].icon_name === 'weather-windy-small' &&
     rainyDay.children[1].icon_name === 'weather-showers-small',
     'Enabling color icons must update current and forecast icons');
 widget._setColorIcons(false);
-assert(widget._weatherIcon.icon_name === 'weather-showers-symbolic' &&
+assert(widget._weatherIcon.icon_name === 'weather-tornado-symbolic' &&
     widget._hourly.children[1].children[1].icon_name === 'weather-showers-symbolic' &&
     widget._hourly.children[2].children[1].icon_name === 'weather-few-clouds-night-symbolic' &&
+    widget._hourly.children[3].children[1].icon_name === 'weather-windy-symbolic' &&
     rainyDay.children[1].icon_name === 'weather-showers-symbolic',
     'Disabling color icons must restore symbolic icons');
 widget._setForecastMode('daily');
@@ -206,12 +225,12 @@ assert(dailyTarget.actor.visible && widget._forecastTargets.filter(target => tar
     .every(target => !target.actor.visible), 'Only daily hover targets should be visible');
 Object.assign(dailyTarget.actor, {x: 10, y: 5, width: 20, height: 20, hover: true});
 dailyTarget.actor.emit('notify::hover');
-assert(widget._tooltip.visible && widget._tooltip.text === 'Rain' && widget._tooltip.y === 29,
+assert(widget._tooltip.visible && widget._tooltip.text === 'Slight rain' && widget._tooltip.y === 29,
     'Daily tooltip must show its forecast below an icon near the top edge');
 widget._setForecastMode('hourly');
 assert(!widget._tooltip.visible && !dailyTarget.actor.visible, 'Switching tabs must hide the daily tooltip');
 widget._setForecastMode('daily');
-widget._updateDaily(days);
+widget._updateDaily(days, 'km/h');
 assert(widget._daily.visible && widget._daily.children.length === 6 && dailyTarget.actor.destroyed &&
     widget._forecastTargets.length === 12, 'Refreshing must replace daily hover targets');
 widget._setForecastMode('hourly');

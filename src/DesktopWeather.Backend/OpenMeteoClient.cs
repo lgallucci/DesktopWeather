@@ -40,7 +40,8 @@ internal sealed class OpenMeteoClient
         var longitude = location.Longitude.ToString(CultureInfo.InvariantCulture);
         var weatherUrl = $"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}"
             + $"&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day"
-            + "&hourly=temperature_2m,weather_code,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min"
+            + "&hourly=temperature_2m,weather_code,is_day,wind_speed_10m"
+            + "&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max"
             + "&timezone=auto&timeformat=unixtime&past_days=1&forecast_days=8"
             + $"&temperature_unit={unit}&wind_speed_unit={(unit == "fahrenheit" ? "mph" : "kmh")}";
         var response = await _httpClient.GetFromJsonAsync<ForecastResponse>(weatherUrl, JsonOptions);
@@ -85,9 +86,9 @@ internal sealed class OpenMeteoClient
         var hourly = response.Hourly
             ?? throw new InvalidDataException("Weather response is missing hourly forecast.");
         if (hourly.Time is null || hourly.Temperature is null || hourly.WeatherCode is null ||
-            hourly.IsDay is null ||
+            hourly.IsDay is null || hourly.WindSpeed is null ||
             hourly.Time.Length != hourly.Temperature.Length || hourly.Time.Length != hourly.WeatherCode.Length ||
-            hourly.Time.Length != hourly.IsDay.Length)
+            hourly.Time.Length != hourly.IsDay.Length || hourly.Time.Length != hourly.WindSpeed.Length)
             throw new InvalidDataException("Hourly forecast is missing required measurements.");
         var currentIndex = Array.FindLastIndex(hourly.Time, time => time <= now.ToUnixTimeSeconds());
         var startIndex = currentIndex - 1;
@@ -99,7 +100,7 @@ internal sealed class OpenMeteoClient
         {
             if (index > startIndex && hourly.Time[index] - hourly.Time[index - 1] != 3600 ||
                 hourly.Temperature[index] is null || hourly.WeatherCode[index] is null ||
-                hourly.IsDay[index] is not (0 or 1))
+                hourly.IsDay[index] is not (0 or 1) || hourly.WindSpeed[index] is null)
                 throw new InvalidDataException("Hourly forecast is missing required measurements.");
 
             var time = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(hourly.Time[index]), timezone);
@@ -107,7 +108,8 @@ internal sealed class OpenMeteoClient
                 time.ToString("hh:mm", CultureInfo.InvariantCulture),
                 hourly.Temperature[index]!.Value,
                 hourly.WeatherCode[index]!.Value,
-                hourly.IsDay[index] == 1));
+                hourly.IsDay[index] == 1,
+                hourly.WindSpeed[index]!.Value));
         }
         return result;
     }
@@ -118,8 +120,10 @@ internal sealed class OpenMeteoClient
         var daily = response.Daily
             ?? throw new InvalidDataException("Weather response is missing daily forecast.");
         if (daily.Time is null || daily.High is null || daily.Low is null || daily.WeatherCode is null ||
+            daily.WindSpeedMax is null ||
             daily.Time.Length != daily.High.Length || daily.Time.Length != daily.Low.Length ||
-            daily.Time.Length != daily.WeatherCode.Length || response.UtcOffsetSeconds is null ||
+            daily.Time.Length != daily.WeatherCode.Length || daily.Time.Length != daily.WindSpeedMax.Length ||
+            response.UtcOffsetSeconds is null ||
             Math.Abs((long)response.UtcOffsetSeconds.Value) > 86400)
             throw new InvalidDataException("Daily forecast is missing required measurements.");
 
@@ -135,11 +139,13 @@ internal sealed class OpenMeteoClient
         for (var index = startIndex; index < startIndex + 6; index++)
         {
             if (dates[index] != tomorrow.AddDays(index - startIndex) ||
-                daily.High[index] is null || daily.Low[index] is null || daily.WeatherCode[index] is null)
+                daily.High[index] is null || daily.Low[index] is null || daily.WeatherCode[index] is null ||
+                daily.WindSpeedMax[index] is null)
                 throw new InvalidDataException("Daily forecast is missing required measurements.");
             result.Add(new DailyConditions(
                 dates[index].ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                daily.High[index]!.Value, daily.Low[index]!.Value, daily.WeatherCode[index]!.Value));
+                daily.High[index]!.Value, daily.Low[index]!.Value, daily.WeatherCode[index]!.Value,
+                daily.WindSpeedMax[index]!.Value));
         }
         return result;
     }
@@ -164,13 +170,15 @@ internal sealed class OpenMeteoClient
         long[]? Time,
         [property: JsonPropertyName("temperature_2m")] double?[]? Temperature,
         [property: JsonPropertyName("weather_code")] int?[]? WeatherCode,
-        [property: JsonPropertyName("is_day")] int?[]? IsDay);
+        [property: JsonPropertyName("is_day")] int?[]? IsDay,
+        [property: JsonPropertyName("wind_speed_10m")] double?[]? WindSpeed);
 
     private sealed record DailyWeatherResponse(
         long[]? Time,
         [property: JsonPropertyName("temperature_2m_max")] double?[]? High,
         [property: JsonPropertyName("temperature_2m_min")] double?[]? Low,
-        [property: JsonPropertyName("weather_code")] int?[]? WeatherCode);
+        [property: JsonPropertyName("weather_code")] int?[]? WeatherCode,
+        [property: JsonPropertyName("wind_speed_10m_max")] double?[]? WindSpeedMax);
 
     private sealed record CurrentWeatherResponse(
         [property: JsonPropertyName("temperature_2m")] double? Temperature,

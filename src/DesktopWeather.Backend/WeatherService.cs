@@ -29,9 +29,9 @@ internal sealed class WeatherService
             current.WeatherCode,
             forecast.Hourly.Select(hour => new WidgetHourlyForecast(
                 hour.Time, hour.Temperature, WeatherCodeDescription.Describe(hour.WeatherCode),
-                hour.WeatherCode, hour.IsDay)).ToArray(),
+                hour.WeatherCode, hour.IsDay, hour.WindSpeed)).ToArray(),
             forecast.Daily.Select(day => new WidgetDailyForecast(
                 day.Date, day.High, day.Low, WeatherCodeDescription.Describe(day.WeatherCode),
-                day.WeatherCode)).ToArray());
+                day.WeatherCode, day.WindSpeedMax)).ToArray());
     }
 }
