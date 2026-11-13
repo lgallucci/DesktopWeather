@@ -130,7 +130,9 @@ assert(windowGroup.children.indexOf(background) < windowGroup.children.indexOf(w
 const hours = Array.from({length: 6}, (_, i) => ({
     time: `${String(i).padStart(2, '0')}:00`,
     temperature: i - 2,
-    conditions: i === 1 ? 'Rain' : 'Clear sky',
+    conditions: i === 1 ? 'Rain' : i === 2 ? 'Mainly clear' : 'Clear sky',
+    weatherCode: i === 1 ? 61 : i === 2 ? 1 : 0,
+    isDay: i < 2,
 }));
 widget._updateHourly(hours);
 assert(widget._hourly.children.length === 6, 'Expected six hourly forecast columns');
@@ -138,6 +140,12 @@ const rain = widget._hourly.children[1];
 assert(rain.children[0].text === '01:00', 'Hour label is incorrect');
 assert(rain.children[1].icon_name === 'weather-showers-symbolic', 'Forecast icon is incorrect');
 assert(rain.children[2].text === '-1°', 'Forecast temperature is incorrect');
+assert(widget._hourly.children[2].children[1].icon_name === 'weather-few-clouds-night-symbolic',
+    'Mainly clear nighttime forecast must use the night icon');
+assert(widget._weatherIconForCode(1, 'large', false) === 'weather-few-clouds-night-symbolic' &&
+    widget._weatherIconForCode(1, 'large', true) === 'weather-few-clouds-symbolic' &&
+    widget._weatherIconForCode(0, 'large', true) === 'weather-clear-symbolic',
+    'WMO clear-sky codes must select distinct daytime and nighttime icons');
 const hourlyTarget = widget._forecastTargets[1];
 assert(hourlyTarget.actor.reactive && hourlyTarget.actor.visible, 'Hourly icon must have a hover target');
 assert(windowGroup.children.indexOf(hourlyTarget.actor) < windowGroup.children.indexOf(application) &&
@@ -166,6 +174,7 @@ const days = Array.from({length: 6}, (_, i) => ({
     high: i + 10,
     low: i - 2,
     conditions: i === 1 ? 'Rain' : 'Clear sky',
+    weatherCode: i === 1 ? 61 : 0,
 }));
 widget._updateDaily(days);
 assert(widget._daily.children.length === 6, 'Expected six daily forecast columns');
@@ -175,15 +184,18 @@ assert(rainyDay.children[1].icon_name === 'weather-showers-symbolic', 'Daily ico
 assert(rainyDay.children[2].text === '11°' && rainyDay.children[3].text === '-1°',
     'Daily high and low are incorrect');
 widget._weatherIcon = new Actor();
-widget._currentConditions = 'Rain';
+widget._currentWeatherCode = 61;
+widget._currentIsDay = false;
 widget._setColorIcons(true);
 assert(widget._weatherIcon.icon_name === 'weather-showers-large' &&
     widget._hourly.children[1].children[1].icon_name === 'weather-showers-small' &&
+    widget._hourly.children[2].children[1].icon_name === 'weather-few-clouds-night-small' &&
     rainyDay.children[1].icon_name === 'weather-showers-small',
     'Enabling color icons must update current and forecast icons');
 widget._setColorIcons(false);
 assert(widget._weatherIcon.icon_name === 'weather-showers-symbolic' &&
     widget._hourly.children[1].children[1].icon_name === 'weather-showers-symbolic' &&
+    widget._hourly.children[2].children[1].icon_name === 'weather-few-clouds-night-symbolic' &&
     rainyDay.children[1].icon_name === 'weather-showers-symbolic',
     'Disabling color icons must restore symbolic icons');
 widget._setForecastMode('daily');

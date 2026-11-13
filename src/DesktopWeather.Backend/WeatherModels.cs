@@ -12,9 +12,10 @@ internal sealed record CurrentConditions(
     double FeelsLike,
     int Humidity,
     double WindSpeed,
-    int WeatherCode);
+    int WeatherCode,
+    bool IsDay);
 
-internal sealed record HourlyConditions(string Time, double Temperature, int WeatherCode);
+internal sealed record HourlyConditions(string Time, double Temperature, int WeatherCode, bool IsDay);
 
 internal sealed record DailyConditions(string Date, double High, double Low, int WeatherCode);
 
@@ -23,9 +24,10 @@ internal sealed record WeatherForecast(
     IReadOnlyList<HourlyConditions> Hourly,
     IReadOnlyList<DailyConditions> Daily);
 
-internal sealed record WidgetHourlyForecast(string Time, double Temperature, string Conditions);
+internal sealed record WidgetHourlyForecast(
+    string Time, double Temperature, string Conditions, int WeatherCode, bool IsDay);
 
-internal sealed record WidgetDailyForecast(string Date, double High, double Low, string Conditions);
+internal sealed record WidgetDailyForecast(string Date, double High, double Low, string Conditions, int WeatherCode);
 
 internal sealed record WidgetWeather(
     string Location,
@@ -35,6 +37,8 @@ internal sealed record WidgetWeather(
     double WindSpeed,
     string TemperatureUnit,
     string WindUnit,
+    bool IsDay,
     string Conditions,
+    int WeatherCode,
     IReadOnlyList<WidgetHourlyForecast> Hourly,
     IReadOnlyList<WidgetDailyForecast> Daily);

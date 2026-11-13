@@ -25,10 +25,16 @@ static async Task CheckForecastAsync(
     var result = await service.GetCurrentWeatherAsync(new WeatherSettings(" Test City ", "fahrenheit"));
     Assert(result.Location == "Test City, Country", "Location formatting changed");
     Assert(result.TemperatureUnit == "F" && result.WindUnit == "mph", "Units changed");
+    Assert(result.IsDay, "Current day/night status was not mapped");
+    Assert(result.WeatherCode == 0, "Current weather code was not mapped");
     Assert(result.Hourly.Count == 6, "Forecast must contain exactly six hours");
     Assert(result.Hourly.Select(hour => hour.Time).SequenceEqual(expectedTimes), "Incorrect local hour window");
     Assert(result.Hourly.Select(hour => hour.Temperature).SequenceEqual(new double[] {10, 11, 12, 13, 14, 15}),
         "Hourly temperatures do not match selected hours");
+    Assert(result.Hourly.Select(hour => hour.IsDay).SequenceEqual(new[] {true, false, false, false, false, false}),
+        "Hourly day/night status was not mapped");
+    Assert(result.Hourly.Select(hour => hour.WeatherCode).SequenceEqual(new[] {0, 61, 1, 0, 0, 0}),
+        "Hourly weather codes were not mapped");
     Assert(result.Hourly[0].Conditions == "Clear sky" && result.Hourly[1].Conditions == "Rain",
         "Hourly conditions were not mapped");
     var localToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(
@@ -40,7 +46,9 @@ static async Task CheckForecastAsync(
     Assert(result.Daily[0].High == 22 && result.Daily[0].Low == 2 &&
         result.Daily[0].Conditions == "Rain", "Daily forecast values were not mapped");
     Assert(handler.ForecastUri is not null &&
-        handler.ForecastUri.Query.Contains("hourly=temperature_2m,weather_code") &&
+        handler.ForecastUri.Query.Contains(
+            "current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day") &&
+        handler.ForecastUri.Query.Contains("hourly=temperature_2m,weather_code,is_day") &&
         handler.ForecastUri.Query.Contains("daily=weather_code,temperature_2m_max,temperature_2m_min") &&
         handler.ForecastUri.Query.Contains("forecast_days=8") &&
         handler.ForecastUri.Query.Contains("timezone=auto") &&
@@ -100,13 +108,15 @@ static string CreateResponse(
             relative_humidity_2m = 50,
             wind_speed_10m = 5,
             weather_code = 0,
+            is_day = 1,
         },
         hourly = new
         {
             time = times,
             temperature_2m = incomplete ? new double?[] {10, 11, null, 13, 14, 15} :
                 new double?[] {10, 11, 12, 13, 14, 15},
-            weather_code = new[] {0, 61, 0, 0, 0, 0},
+            weather_code = new[] {0, 61, 1, 0, 0, 0},
+            is_day = new[] {1, 0, 0, 0, 0, 0},
         },
         daily = new
         {

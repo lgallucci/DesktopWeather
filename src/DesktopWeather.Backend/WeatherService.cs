@@ -24,10 +24,14 @@ internal sealed class WeatherService
             current.WindSpeed,
             settings.Unit == "fahrenheit" ? "F" : "C",
             settings.Unit == "fahrenheit" ? "mph" : "km/h",
+            current.IsDay,
             WeatherCodeDescription.Describe(current.WeatherCode),
+            current.WeatherCode,
             forecast.Hourly.Select(hour => new WidgetHourlyForecast(
-                hour.Time, hour.Temperature, WeatherCodeDescription.Describe(hour.WeatherCode))).ToArray(),
+                hour.Time, hour.Temperature, WeatherCodeDescription.Describe(hour.WeatherCode),
+                hour.WeatherCode, hour.IsDay)).ToArray(),
             forecast.Daily.Select(day => new WidgetDailyForecast(
-                day.Date, day.High, day.Low, WeatherCodeDescription.Describe(day.WeatherCode))).ToArray());
+                day.Date, day.High, day.Low, WeatherCodeDescription.Describe(day.WeatherCode),
+                day.WeatherCode)).ToArray());
     }
 }

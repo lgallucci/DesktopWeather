@@ -39,7 +39,7 @@ export default class DesktopWeatherExtension extends Extension {
         });
         this._details = new St.Label({style_class: 'desktop-weather-details', text: ''});
         this._weatherIcon = new St.Icon({
-            icon_name: this._weatherIconForConditions('Overcast', 'large'),
+            icon_name: this._weatherIconForCode(3, 'large'),
             style_class: 'desktop-weather-icon',
             y_align: Clutter.ActorAlign.CENTER,
         });
@@ -241,14 +241,14 @@ export default class DesktopWeatherExtension extends Extension {
         this._tooltip.set_position(x, Math.max(area.y, Math.min(y, area.y + area.height - height)));
     }
 
-    _addForecastTarget(icon, mode, conditions) {
+    _addForecastTarget(icon, mode, conditions, weatherCode, isDay = true) {
         const actor = new St.Widget({
             reactive: true,
             track_hover: true,
             visible: mode === this._forecastMode,
             accessible_name: conditions,
         });
-        const target = {icon, actor, mode, conditions};
+        const target = {icon, actor, mode, conditions, weatherCode, isDay};
         this._forecastTargets.push(target);
         global.window_group.add_child(actor);
         icon.connect('notify::allocation', () => this._position());
@@ -441,19 +441,26 @@ export default class DesktopWeatherExtension extends Extension {
                     if (!Array.isArray(weather.hourly) || weather.hourly.length !== 6 ||
                         weather.hourly.some(hour => typeof hour?.time !== 'string' ||
                             typeof hour.temperature !== 'number' || !Number.isFinite(hour.temperature) ||
-                            typeof hour.conditions !== 'string'))
+                            typeof hour.conditions !== 'string' || !Number.isInteger(hour.weatherCode) ||
+                            typeof hour.isDay !== 'boolean'))
                         throw new Error('Backend returned an invalid hourly forecast');
                     if (!Array.isArray(weather.daily) || weather.daily.length !== 6 ||
                         weather.daily.some(day => typeof day?.date !== 'string' ||
                             !/^\d{4}-\d{2}-\d{2}$/.test(day.date) ||
                             !Number.isFinite(day.high) || !Number.isFinite(day.low) ||
-                            typeof day.conditions !== 'string'))
+                            typeof day.conditions !== 'string' || !Number.isInteger(day.weatherCode)))
                         throw new Error('Backend returned an invalid daily forecast');
+                    if (typeof weather.isDay !== 'boolean')
+                        throw new Error('Backend returned invalid current day/night status');
+                    if (!Number.isInteger(weather.weatherCode))
+                        throw new Error('Backend returned an invalid current weather code');
                     this._location.text = weather.location;
                     this._temperature.text = `${Math.round(weather.temperature)}°${weather.temperatureUnit}`;
                     this._conditions.text = weather.conditions;
-                    this._currentConditions = weather.conditions;
-                    this._weatherIcon.icon_name = this._weatherIconForConditions(weather.conditions, 'large');
+                    this._currentIsDay = weather.isDay;
+                    this._currentWeatherCode = weather.weatherCode;
+                    this._weatherIcon.icon_name = this._weatherIconForCode(
+                        weather.weatherCode, 'large', weather.isDay);
                     this._details.text = `Feels like ${Math.round(weather.feelsLike)}° · Humidity ${weather.humidity}%\nWind ${Math.round(weather.windSpeed)} ${weather.windUnit}`;
                     this._updateHourly(weather.hourly);
                     this._updateDaily(weather.daily);
@@ -490,11 +497,11 @@ export default class DesktopWeatherExtension extends Extension {
             }));
             const icon = new St.Icon({
                 style_class: 'desktop-weather-hour-icon',
-                icon_name: this._weatherIconForConditions(hour.conditions),
+                icon_name: this._weatherIconForCode(hour.weatherCode, 'small', hour.isDay),
                 x_align: Clutter.ActorAlign.CENTER,
             });
             column.add_child(icon);
-            this._addForecastTarget(icon, 'hourly', hour.conditions);
+            this._addForecastTarget(icon, 'hourly', hour.conditions, hour.weatherCode, hour.isDay);
             column.add_child(new St.Label({
                 style_class: 'desktop-weather-hour-temperature',
                 text: `${Math.round(hour.temperature)}°`,
@@ -526,11 +533,11 @@ export default class DesktopWeatherExtension extends Extension {
             }));
             const icon = new St.Icon({
                 style_class: 'desktop-weather-hour-icon',
-                icon_name: this._weatherIconForConditions(day.conditions),
+                icon_name: this._weatherIconForCode(day.weatherCode),
                 x_align: Clutter.ActorAlign.CENTER,
             });
             column.add_child(icon);
-            this._addForecastTarget(icon, 'daily', day.conditions);
+            this._addForecastTarget(icon, 'daily', day.conditions, day.weatherCode);
             column.add_child(new St.Label({
                 style_class: 'desktop-weather-hour-temperature',
                 text: `${high}°`,
@@ -546,25 +553,24 @@ export default class DesktopWeatherExtension extends Extension {
         this._restackControls();
     }
 
-    _weatherIconForConditions(conditions, size = 'small') {
-        const description = conditions.toLowerCase();
+    _weatherIconForCode(weatherCode, size = 'small', isDay = true) {
         let icon;
-        if (description.includes('thunderstorm'))
-            icon = 'weather-storm';
-        else if (description.includes('snow'))
-            icon = 'weather-snow';
-        else if (description.includes('fog'))
-            icon = 'weather-fog';
-        else if (description.includes('drizzle'))
-            icon = 'weather-showers-scattered';
-        else if (description.includes('rain'))
-            icon = 'weather-showers';
-        else if (description.includes('overcast'))
+        if (weatherCode === 0)
+            icon = isDay ? 'weather-clear' : 'weather-clear-night';
+        else if (weatherCode === 1 || weatherCode === 2)
+            icon = isDay ? 'weather-few-clouds' : 'weather-few-clouds-night';
+        else if (weatherCode === 3)
             icon = 'weather-overcast';
-        else if (description.includes('cloud'))
-            icon = 'weather-few-clouds';
-        else if (description.includes('clear'))
-            icon = 'weather-clear';
+        else if (weatherCode === 45 || weatherCode === 48)
+            icon = 'weather-fog';
+        else if ([51, 53, 55, 56, 57].includes(weatherCode))
+            icon = 'weather-showers-scattered';
+        else if ([61, 63, 65, 66, 67, 80, 81, 82].includes(weatherCode))
+            icon = 'weather-showers';
+        else if ([71, 73, 75, 77, 85, 86].includes(weatherCode))
+            icon = 'weather-snow';
+        else if (weatherCode === 95 || weatherCode === 96 || weatherCode === 99)
+            icon = 'weather-storm';
         else
             icon = 'weather-severe-alert';
 
@@ -574,18 +580,19 @@ export default class DesktopWeatherExtension extends Extension {
     _setColorIcons(enabled) {
         this._colorIcons = enabled;
         if (this._weatherIcon)
-            this._weatherIcon.icon_name = this._weatherIconForConditions(
-                this._currentConditions ?? 'Overcast', 'large');
+            this._weatherIcon.icon_name = this._weatherIconForCode(
+                this._currentWeatherCode ?? -1, 'large', this._currentIsDay ?? true);
         for (const target of this._forecastTargets)
-            target.icon.icon_name = this._weatherIconForConditions(target.conditions);
+            target.icon.icon_name = this._weatherIconForCode(
+                target.weatherCode, 'small', target.isDay);
     }
 
     _showError(error) {
         console.error(`Desktop Weather: ${error.message}`);
         if (!this._hasWeather) {
             this._conditions.text = 'Weather unavailable';
-            this._currentConditions = 'Severe alert';
-            this._weatherIcon.icon_name = this._weatherIconForConditions(this._currentConditions, 'large');
+            this._currentWeatherCode = -1;
+            this._weatherIcon.icon_name = this._weatherIconForCode(this._currentWeatherCode, 'large');
         }
         this._status.text = 'Update failed; see GNOME Shell logs';
     }
