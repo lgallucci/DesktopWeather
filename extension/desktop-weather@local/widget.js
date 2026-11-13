@@ -443,7 +443,7 @@ export default class DesktopWeatherExtension extends Extension {
                     this._updateHourly(weather.hourly);
                     this._updateDaily(weather.daily);
                     this._status.text = 'Open-Meteo · Updated ' +
-                        GLib.DateTime.new_now_local().format('%H:%M');
+                        GLib.DateTime.new_now_local().format('%I:%M %p');
                     this._hasWeather = true;
                 } catch (error) {
                     if (this._enabled && this._process === process)

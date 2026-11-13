@@ -99,7 +99,7 @@ internal sealed class OpenMeteoClient
 
             var time = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(hourly.Time[index]), timezone);
             result.Add(new HourlyConditions(
-                time.ToString("HH:mm", CultureInfo.InvariantCulture),
+                time.ToString("hh:mm", CultureInfo.InvariantCulture),
                 hourly.Temperature[index]!.Value,
                 hourly.WeatherCode[index]!.Value));
         }
