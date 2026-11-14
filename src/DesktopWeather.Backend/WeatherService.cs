@@ -33,7 +33,7 @@ internal sealed class WeatherService
                 hour.Time, hour.Temperature, WeatherCodeDescription.Describe(hour.WeatherCode),
                 hour.WeatherCode, hour.IsDay, hour.WindSpeed)).ToArray(),
             forecast.Daily.Select(day => new WidgetDailyForecast(
-                day.Date, day.High, day.Low, WeatherCodeDescription.Describe(day.WeatherCode),
-                day.WeatherCode, day.WindSpeedMax)).ToArray());
+                day.Date, day.Sunrise, day.Sunset, day.High, day.Low,
+                WeatherCodeDescription.Describe(day.WeatherCode), day.WeatherCode, day.WindSpeedMax)).ToArray());
     }
 }

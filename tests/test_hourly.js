@@ -183,6 +183,8 @@ assert(widget._hourly.children.length === 6 && hourlyTarget.actor.destroyed && !
 
 const days = Array.from({length: 6}, (_, i) => ({
     date: `2026-01-${String(i + 1).padStart(2, '0')}`,
+    sunrise: '6:30 AM',
+    sunset: '6:45 PM',
     high: i + 10,
     low: i - 2,
     conditions: i === 1 ? 'Slight rain' : 'Clear sky',
@@ -197,7 +199,8 @@ assert(rainyDay.children[1].icon_name === 'weather-showers-symbolic', 'Daily ico
 assert(rainyDay.children[2].text === '11°' && rainyDay.children[3].text === '-1°',
     'Daily high and low are incorrect');
 assert(widget._daily.children[2].children[1].icon_name === 'weather-windy-symbolic' &&
-    widget._forecastTargets[8].actor.accessible_name === 'Clear sky · Max wind 41 km/h',
+    widget._forecastTargets[8].actor.accessible_name ===
+        'Clear sky · Max wind 41 km/h\nSR: 6:30 AM\nSS: 6:45 PM',
     'Daily wind icon must use the daily maximum wind speed');
 widget._weatherIcon = new Actor();
 widget._currentWeatherCode = 19;
@@ -225,7 +228,8 @@ assert(dailyTarget.actor.visible && widget._forecastTargets.filter(target => tar
     .every(target => !target.actor.visible), 'Only daily hover targets should be visible');
 Object.assign(dailyTarget.actor, {x: 10, y: 5, width: 20, height: 20, hover: true});
 dailyTarget.actor.emit('notify::hover');
-assert(widget._tooltip.visible && widget._tooltip.text === 'Slight rain' && widget._tooltip.y === 29,
+assert(widget._tooltip.visible &&
+    widget._tooltip.text === 'Slight rain\nSR: 6:30 AM\nSS: 6:45 PM' && widget._tooltip.y === 29,
     'Daily tooltip must show its forecast below an icon near the top edge');
 widget._setForecastMode('hourly');
 assert(!widget._tooltip.visible && !dailyTarget.actor.visible, 'Switching tabs must hide the daily tooltip');

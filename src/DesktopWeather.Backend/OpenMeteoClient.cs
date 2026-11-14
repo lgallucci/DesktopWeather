@@ -121,9 +121,10 @@ internal sealed class OpenMeteoClient
         var daily = response.Daily
             ?? throw new InvalidDataException("Weather response is missing daily forecast.");
         if (daily.Time is null || daily.High is null || daily.Low is null || daily.WeatherCode is null ||
-            daily.WindSpeedMax is null ||
+            daily.WindSpeedMax is null || daily.Sunrise is null || daily.Sunset is null ||
             daily.Time.Length != daily.High.Length || daily.Time.Length != daily.Low.Length ||
             daily.Time.Length != daily.WeatherCode.Length || daily.Time.Length != daily.WindSpeedMax.Length ||
+            daily.Time.Length != daily.Sunrise.Length || daily.Time.Length != daily.Sunset.Length ||
             response.UtcOffsetSeconds is null ||
             Math.Abs((long)response.UtcOffsetSeconds.Value) > 86400)
             throw new InvalidDataException("Daily forecast is missing required measurements.");
@@ -141,10 +142,13 @@ internal sealed class OpenMeteoClient
         {
             if (dates[index] != tomorrow.AddDays(index - startIndex) ||
                 daily.High[index] is null || daily.Low[index] is null || daily.WeatherCode[index] is null ||
-                daily.WindSpeedMax[index] is null)
+                daily.WindSpeedMax[index] is null || daily.Sunrise[index] is not long sunrise ||
+                daily.Sunset[index] is not long sunset)
                 throw new InvalidDataException("Daily forecast is missing required measurements.");
             result.Add(new DailyConditions(
                 dates[index].ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                FormatLocalTime(sunrise, dates[index], timezone),
+                FormatLocalTime(sunset, dates[index], timezone),
                 daily.High[index]!.Value, daily.Low[index]!.Value, daily.WeatherCode[index]!.Value,
                 daily.WindSpeedMax[index]!.Value));
         }

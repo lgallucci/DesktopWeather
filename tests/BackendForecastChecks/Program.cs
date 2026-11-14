@@ -53,6 +53,8 @@ static async Task CheckForecastAsync(
         "Incorrect daily forecast dates");
     Assert(result.Daily[0].High == 22 && result.Daily[0].Low == 2 &&
         result.Daily[0].Conditions == "Slight rain", "Daily forecast values were not mapped");
+    Assert(result.Daily[0].Sunrise == "6:30 AM" && result.Daily[0].Sunset == "6:45 PM",
+        "Daily sunrise and sunset were not mapped");
     Assert(result.Daily.Select(day => day.WindSpeedMax).SequenceEqual(new double[] {22, 23, 24, 25, 26, 27}),
         "Daily maximum wind speeds were not mapped");
     Assert(WeatherCodeDescription.Describe(19) == "Funnel cloud (tornado or waterspout)",
