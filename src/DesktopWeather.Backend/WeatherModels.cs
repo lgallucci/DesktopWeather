@@ -21,6 +21,8 @@ internal sealed record DailyConditions(string Date, double High, double Low, int
 
 internal sealed record WeatherForecast(
     CurrentConditions Current,
+    string Sunrise,
+    string Sunset,
     IReadOnlyList<HourlyConditions> Hourly,
     IReadOnlyList<DailyConditions> Daily);
 
@@ -41,5 +43,7 @@ internal sealed record WidgetWeather(
     bool IsDay,
     string Conditions,
     int WeatherCode,
+    string Sunrise,
+    string Sunset,
     IReadOnlyList<WidgetHourlyForecast> Hourly,
     IReadOnlyList<WidgetDailyForecast> Daily);

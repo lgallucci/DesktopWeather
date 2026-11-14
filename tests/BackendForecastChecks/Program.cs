@@ -15,6 +15,7 @@ await CheckForecastAsync(
 await CheckIncompleteForecastAsync();
 await CheckIncompleteDailyForecastAsync();
 await CheckIncompleteWindAsync();
+await CheckIncompleteSunriseSunsetAsync();
 CheckForecastDescriptions();
 Console.WriteLine("Forecast checks passed");
 
@@ -30,6 +31,8 @@ static async Task CheckForecastAsync(
     Assert(result.IsDay, "Current day/night status was not mapped");
     Assert(result.WeatherCode == 61 && result.Conditions == "Slight rain",
         "Current weather description was not mapped");
+    Assert(result.Sunrise == "6:30 AM" && result.Sunset == "6:45 PM",
+        "Today's local sunrise and sunset were not mapped");
     Assert(result.Hourly.Count == 6, "Forecast must contain exactly six hours");
     Assert(result.Hourly.Select(hour => hour.Time).SequenceEqual(expectedTimes), "Incorrect local hour window");
     Assert(result.Hourly.Select(hour => hour.Temperature).SequenceEqual(new double[] {10, 11, 12, 13, 14, 15}),
@@ -59,7 +62,7 @@ static async Task CheckForecastAsync(
             "current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day") &&
         handler.ForecastUri.Query.Contains("hourly=temperature_2m,weather_code,is_day,wind_speed_10m") &&
         handler.ForecastUri.Query.Contains(
-            "daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max") &&
+            "daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,sunrise,sunset") &&
         handler.ForecastUri.Query.Contains("forecast_days=8") &&
         handler.ForecastUri.Query.Contains("timezone=auto") &&
         handler.ForecastUri.Query.Contains("timeformat=unixtime") &&
@@ -140,9 +143,25 @@ static async Task CheckIncompleteDailyForecastAsync()
     }
 }
 
+static async Task CheckIncompleteSunriseSunsetAsync()
+{
+    var now = new DateTimeOffset(2026, 1, 1, 12, 30, 0, TimeSpan.Zero);
+    using var http = new HttpClient(new ForecastHandler(
+        CreateResponse("UTC", now.AddMinutes(-90), incompleteSunrise: true)));
+    var client = new OpenMeteoClient(http, new FixedClock(now));
+    try
+    {
+        await client.GetForecastAsync(new GeocodedLocation("Test", 0, 0, null, null), "celsius");
+        throw new Exception("Incomplete sunrise data was accepted");
+    }
+    catch (InvalidDataException ex) when (ex.Message.Contains("sunrise and sunset"))
+    {
+    }
+}
+
 static string CreateResponse(
     string timezone, DateTimeOffset firstHour, bool incomplete = false, bool incompleteDaily = false,
-    bool incompleteHourlyWind = false, bool incompleteDailyWind = false)
+    bool incompleteHourlyWind = false, bool incompleteDailyWind = false, bool incompleteSunrise = false)
 {
     var times = Enumerable.Range(0, 6).Select(i => firstHour.AddHours(i).ToUnixTimeSeconds()).ToArray();
     var zone = TimeZoneInfo.FindSystemTimeZoneById(timezone);
@@ -185,6 +204,13 @@ static string CreateResponse(
             wind_speed_10m_max = incompleteDailyWind
                 ? new double?[] {20, 21, null, 23, 24, 25, 26, 27}
                 : new double?[] {20, 21, 22, 23, 24, 25, 26, 27},
+            sunrise = Enumerable.Range(0, 8)
+                .Select(i => (long?)(firstDay.AddDays(i).AddHours(6.5).ToUnixTimeSeconds()))
+                .Select((time, index) => incompleteSunrise && index == 1 ? null : time)
+                .ToArray(),
+            sunset = Enumerable.Range(0, 8)
+                .Select(i => (long?)(firstDay.AddDays(i).AddHours(18.75).ToUnixTimeSeconds()))
+                .ToArray(),
         },
     });
 }

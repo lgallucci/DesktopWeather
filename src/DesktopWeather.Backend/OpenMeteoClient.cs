@@ -41,7 +41,7 @@ internal sealed class OpenMeteoClient
         var weatherUrl = $"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}"
             + $"&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day"
             + "&hourly=temperature_2m,weather_code,is_day,wind_speed_10m"
-            + "&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max"
+            + "&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,sunrise,sunset"
             + "&timezone=auto&timeformat=unixtime&past_days=1&forecast_days=8"
             + $"&temperature_unit={unit}&wind_speed_unit={(unit == "fahrenheit" ? "mph" : "kmh")}";
         var response = await _httpClient.GetFromJsonAsync<ForecastResponse>(weatherUrl, JsonOptions);
@@ -62,8 +62,9 @@ internal sealed class OpenMeteoClient
             current.IsDay == 1);
         var now = _clock.GetUtcNow();
         var timezone = GetTimezone(response!);
-        return new WeatherForecast(conditions, SelectHourlyForecast(response!, now, timezone),
-            SelectDailyForecast(response!, now, timezone));
+        var (sunrise, sunset) = SelectSunriseAndSunset(response!, now, timezone);
+        return new WeatherForecast(conditions, sunrise, sunset,
+            SelectHourlyForecast(response!, now, timezone), SelectDailyForecast(response!, now, timezone));
     }
 
     private static TimeZoneInfo GetTimezone(ForecastResponse response)
@@ -150,6 +151,44 @@ internal sealed class OpenMeteoClient
         return result;
     }
 
+    private static (string Sunrise, string Sunset) SelectSunriseAndSunset(
+        ForecastResponse response, DateTimeOffset now, TimeZoneInfo timezone)
+    {
+        var daily = response.Daily
+            ?? throw new InvalidDataException("Weather response is missing daily forecast.");
+        if (daily.Time is null || daily.Sunrise is null || daily.Sunset is null ||
+            daily.Time.Length != daily.Sunrise.Length || daily.Time.Length != daily.Sunset.Length ||
+            response.UtcOffsetSeconds is null ||
+            Math.Abs((long)response.UtcOffsetSeconds.Value) > 86400)
+            throw new InvalidDataException("Daily forecast is missing sunrise and sunset.");
+
+        var dates = daily.Time.Select(time => DateOnly.FromDateTime(
+            DateTimeOffset.FromUnixTimeSeconds(time).AddSeconds(response.UtcOffsetSeconds.Value).UtcDateTime)).ToArray();
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(now, timezone).DateTime);
+        var index = Array.IndexOf(dates, today);
+        if (index < 0 || daily.Sunrise[index] is not long sunrise || daily.Sunset[index] is not long sunset)
+            throw new InvalidDataException("Daily forecast does not include today's sunrise and sunset.");
+
+        return (FormatLocalTime(sunrise, today, timezone), FormatLocalTime(sunset, today, timezone));
+    }
+
+    private static string FormatLocalTime(long unixTime, DateOnly expectedDate, TimeZoneInfo timezone)
+    {
+        DateTimeOffset localTime;
+        try
+        {
+            localTime = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeSeconds(unixTime), timezone);
+        }
+        catch (ArgumentOutOfRangeException ex)
+        {
+            throw new InvalidDataException("Weather response contains an invalid sunrise or sunset time.", ex);
+        }
+
+        if (DateOnly.FromDateTime(localTime.DateTime) != expectedDate)
+            throw new InvalidDataException("Weather response contains a sunrise or sunset for the wrong date.");
+        return localTime.ToString("h:mm tt", CultureInfo.InvariantCulture);
+    }
+
     private sealed record GeocodingResponse(LocationResponse[]? Results);
 
     private sealed record LocationResponse(
@@ -178,7 +217,9 @@ internal sealed class OpenMeteoClient
         [property: JsonPropertyName("temperature_2m_max")] double?[]? High,
         [property: JsonPropertyName("temperature_2m_min")] double?[]? Low,
         [property: JsonPropertyName("weather_code")] int?[]? WeatherCode,
-        [property: JsonPropertyName("wind_speed_10m_max")] double?[]? WindSpeedMax);
+        [property: JsonPropertyName("wind_speed_10m_max")] double?[]? WindSpeedMax,
+        [property: JsonPropertyName("sunrise")] long?[]? Sunrise,
+        [property: JsonPropertyName("sunset")] long?[]? Sunset);
 
     private sealed record CurrentWeatherResponse(
         [property: JsonPropertyName("temperature_2m")] double? Temperature,

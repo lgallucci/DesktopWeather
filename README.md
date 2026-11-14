@@ -15,6 +15,7 @@ The extension currently targets GNOME Shell 46 (Zorin OS 18). It appears in
 the upper-right corner of the primary monitor and updates every 15 minutes.
 The hourly forecast shows the previous hour, the current hour, and the next
 four hours, using the configured location's local time and temperature unit.
+Today's local sunrise and sunset are shown with the current weather details.
 The daily forecast shows the next six days, starting tomorrow, with daily highs and lows.
 Wind above 25 mph (40.2336 km/h) uses the wind icon, based on the current or
 hourly wind speed or the daily maximum; a code 19 tornado icon takes precedence.

@@ -27,6 +27,8 @@ internal sealed class WeatherService
             current.IsDay,
             WeatherCodeDescription.Describe(current.WeatherCode),
             current.WeatherCode,
+            forecast.Sunrise,
+            forecast.Sunset,
             forecast.Hourly.Select(hour => new WidgetHourlyForecast(
                 hour.Time, hour.Temperature, WeatherCodeDescription.Describe(hour.WeatherCode),
                 hour.WeatherCode, hour.IsDay, hour.WindSpeed)).ToArray(),

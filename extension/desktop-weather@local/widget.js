@@ -456,6 +456,8 @@ export default class DesktopWeatherExtension extends Extension {
                         throw new Error('Backend returned invalid current day/night status');
                     if (!Number.isInteger(weather.weatherCode))
                         throw new Error('Backend returned an invalid current weather code');
+                    if (typeof weather.sunrise !== 'string' || typeof weather.sunset !== 'string')
+                        throw new Error('Backend returned invalid sunrise or sunset data');
                     if (!Number.isFinite(weather.windSpeed) || weather.windSpeed < 0 ||
                         !['mph', 'km/h'].includes(weather.windUnit))
                         throw new Error('Backend returned invalid wind data');
@@ -470,7 +472,7 @@ export default class DesktopWeatherExtension extends Extension {
                     const roundedWind = Math.round(weather.windSpeed);
                     const displayedWind = this._currentIsWindy && !this._isWindy(roundedWind, weather.windUnit)
                         ? weather.windSpeed : roundedWind;
-                    this._details.text = `Feels like ${Math.round(weather.feelsLike)}° · Humidity ${weather.humidity}%\nWind ${displayedWind} ${weather.windUnit}`;
+                    this._details.text = `Feels like ${Math.round(weather.feelsLike)}° · Humidity ${weather.humidity}%\nWind ${displayedWind} ${weather.windUnit}\nSunrise ${weather.sunrise} · Sunset ${weather.sunset}`;
                     this._updateHourly(weather.hourly, weather.windUnit);
                     this._updateDaily(weather.daily, weather.windUnit);
                     this._status.text = 'Open-Meteo · Updated ' +
