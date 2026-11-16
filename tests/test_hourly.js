@@ -199,8 +199,7 @@ assert(rainyDay.children[1].icon_name === 'weather-showers-symbolic', 'Daily ico
 assert(rainyDay.children[2].text === '11°' && rainyDay.children[3].text === '-1°',
     'Daily high and low are incorrect');
 assert(widget._daily.children[2].children[1].icon_name === 'weather-windy-symbolic' &&
-    widget._forecastTargets[8].actor.accessible_name ===
-        'Clear sky · Max wind 41 km/h\nSR: 6:30 AM\nSS: 6:45 PM',
+    widget._forecastTargets[8].actor.accessible_name === 'Clear sky · Max wind 41 km/h',
     'Daily wind icon must use the daily maximum wind speed');
 widget._weatherIcon = new Actor();
 widget._currentWeatherCode = 19;
@@ -229,8 +228,13 @@ assert(dailyTarget.actor.visible && widget._forecastTargets.filter(target => tar
 Object.assign(dailyTarget.actor, {x: 10, y: 5, width: 20, height: 20, hover: true});
 dailyTarget.actor.emit('notify::hover');
 assert(widget._tooltip.visible &&
-    widget._tooltip.text === 'Slight rain\nSR: 6:30 AM\nSS: 6:45 PM' && widget._tooltip.y === 29,
+    widget._tooltip.text === 'Slight rain' && widget._tooltip.y === 29,
     'Daily tooltip must show its forecast below an icon near the top edge');
+const windyTarget = widget._forecastTargets[8];
+windyTarget.actor.hover = true;
+windyTarget.actor.emit('notify::hover');
+assert(widget._tooltip.text === 'Clear sky · Max wind 41 km/h',
+    'Windy daily tooltip must retain maximum wind without sunrise or sunset');
 widget._setForecastMode('hourly');
 assert(!widget._tooltip.visible && !dailyTarget.actor.visible, 'Switching tabs must hide the daily tooltip');
 widget._setForecastMode('daily');

@@ -534,7 +534,6 @@ export default class DesktopWeatherExtension extends Extension {
             const isWindy = this._isWindy(day.windSpeedMax, windUnit);
             const conditions = isWindy
                 ? `${day.conditions} · Max wind ${day.windSpeedMax} ${windUnit}` : day.conditions;
-            const tooltip = `${conditions}\nSR: ${day.sunrise}\nSS: ${day.sunset}`;
             const [year, month, date] = day.date.split('-').map(Number);
             const label = GLib.DateTime.new_utc(year, month, date, 12, 0, 0).format('%a %d');
             const high = Math.round(day.high);
@@ -556,7 +555,7 @@ export default class DesktopWeatherExtension extends Extension {
                 x_align: Clutter.ActorAlign.CENTER,
             });
             column.add_child(icon);
-            this._addForecastTarget(icon, 'daily', tooltip, day.weatherCode, true, isWindy);
+            this._addForecastTarget(icon, 'daily', conditions, day.weatherCode, true, isWindy);
             column.add_child(new St.Label({
                 style_class: 'desktop-weather-hour-temperature',
                 text: `${high}°`,
