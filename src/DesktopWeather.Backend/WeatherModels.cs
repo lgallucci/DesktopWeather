@@ -12,6 +12,7 @@ internal sealed record CurrentConditions(
     double FeelsLike,
     int Humidity,
     double WindSpeed,
+    int WindDirection,
     int WeatherCode,
     bool IsDay);
 
@@ -40,6 +41,7 @@ internal sealed record WidgetWeather(
     double FeelsLike,
     int Humidity,
     double WindSpeed,
+    int WindDirection,
     string TemperatureUnit,
     string WindUnit,
     bool IsDay,

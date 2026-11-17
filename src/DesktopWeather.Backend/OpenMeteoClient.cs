@@ -39,7 +39,7 @@ internal sealed class OpenMeteoClient
         var latitude = location.Latitude.ToString(CultureInfo.InvariantCulture);
         var longitude = location.Longitude.ToString(CultureInfo.InvariantCulture);
         var weatherUrl = $"https://api.open-meteo.com/v1/forecast?latitude={latitude}&longitude={longitude}"
-            + $"&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day"
+            + $"&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day"
             + "&hourly=temperature_2m,weather_code,is_day,wind_speed_10m"
             + "&daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,sunrise,sunset"
             + "&timezone=auto&timeformat=unixtime&past_days=1&forecast_days=8"
@@ -49,7 +49,8 @@ internal sealed class OpenMeteoClient
             ?? throw new InvalidDataException("Weather response is missing current conditions.");
 
         if (current.Temperature is null || current.FeelsLike is null || current.Humidity is null ||
-            current.WindSpeed is null || current.WeatherCode is null ||
+            current.WindSpeed is null || current.WindDirection is null or < 0 or > 360 ||
+            current.WeatherCode is null ||
             current.IsDay is not (0 or 1))
             throw new InvalidDataException("Weather response is missing a required measurement.");
 
@@ -58,6 +59,7 @@ internal sealed class OpenMeteoClient
             current.FeelsLike.Value,
             current.Humidity.Value,
             current.WindSpeed.Value,
+            current.WindDirection.Value,
             current.WeatherCode.Value,
             current.IsDay == 1);
         var now = _clock.GetUtcNow();
@@ -230,6 +232,7 @@ internal sealed class OpenMeteoClient
         [property: JsonPropertyName("apparent_temperature")] double? FeelsLike,
         [property: JsonPropertyName("relative_humidity_2m")] int? Humidity,
         [property: JsonPropertyName("wind_speed_10m")] double? WindSpeed,
+        [property: JsonPropertyName("wind_direction_10m")] int? WindDirection,
         [property: JsonPropertyName("weather_code")] int? WeatherCode,
         [property: JsonPropertyName("is_day")] int? IsDay);
 }

@@ -152,6 +152,11 @@ assert(widget._hourly.children[3].children[1].icon_name === 'weather-windy-symbo
     'Hourly wind above 25 mph must use the wind icon and explain it');
 assert(widget._weatherIconForCode(97) === 'weather-storm-symbolic',
     'Heavy thunderstorm must use the storm icon');
+assert(widget._windDirectionForDegrees(0) === 'S' &&
+    widget._windDirectionForDegrees(22) === 'SSW' &&
+    widget._windDirectionForDegrees(225) === 'NE' &&
+    widget._windDirectionForDegrees(360) === 'S',
+    'Wind direction must point toward its travel direction');
 assert(!widget._isWindy(25, 'mph') && widget._isWindy(25.01, 'mph') &&
     !widget._isWindy(40.2336, 'km/h') && widget._isWindy(40.234, 'km/h'),
     'Wind threshold must be strictly above 25 mph in both units');

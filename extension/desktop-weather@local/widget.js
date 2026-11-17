@@ -462,6 +462,9 @@ export default class DesktopWeatherExtension extends Extension {
                     if (!Number.isFinite(weather.windSpeed) || weather.windSpeed < 0 ||
                         !['mph', 'km/h'].includes(weather.windUnit))
                         throw new Error('Backend returned invalid wind data');
+                    if (!Number.isInteger(weather.windDirection) ||
+                        weather.windDirection < 0 || weather.windDirection > 360)
+                        throw new Error('Backend returned invalid wind direction');
                     this._location.text = weather.location;
                     this._temperature.text = `${Math.round(weather.temperature)}°${weather.temperatureUnit}`;
                     this._conditions.text = weather.conditions;
@@ -473,7 +476,7 @@ export default class DesktopWeatherExtension extends Extension {
                     const roundedWind = Math.round(weather.windSpeed);
                     const displayedWind = this._currentIsWindy && !this._isWindy(roundedWind, weather.windUnit)
                         ? weather.windSpeed : roundedWind;
-                    this._details.text = `Feels like ${Math.round(weather.feelsLike)}° · Humidity ${weather.humidity}%\nWind ${displayedWind} ${weather.windUnit}\nSunrise ${weather.sunrise} · Sunset ${weather.sunset}`;
+                    this._details.text = `Feels like ${Math.round(weather.feelsLike)}° · Humidity ${weather.humidity}%\nWind toward ${this._windDirectionForDegrees(weather.windDirection)} · ${displayedWind} ${weather.windUnit}\nSunrise ${weather.sunrise} · Sunset ${weather.sunset}`;
                     this._updateHourly(weather.hourly, weather.windUnit);
                     this._updateDaily(weather.daily, weather.windUnit);
                     this._status.text = 'Open-Meteo · Updated ' +
@@ -524,7 +527,16 @@ export default class DesktopWeatherExtension extends Extension {
             }));
             this._hourly.add_child(column);
         }
+
         this._restackControls();
+    }
+
+    _windDirectionForDegrees(degrees) {
+        const directions = [
+            'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+            'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW',
+        ];
+        return directions[Math.round(((degrees + 180) % 360) / 22.5) % directions.length];
     }
 
     _updateDaily(days, windUnit) {

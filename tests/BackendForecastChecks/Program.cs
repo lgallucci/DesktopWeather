@@ -15,6 +15,7 @@ await CheckForecastAsync(
 await CheckIncompleteForecastAsync();
 await CheckIncompleteDailyForecastAsync();
 await CheckIncompleteWindAsync();
+await CheckIncompleteCurrentWindDirectionAsync();
 await CheckIncompleteSunriseSunsetAsync();
 CheckForecastDescriptions();
 Console.WriteLine("Forecast checks passed");
@@ -29,6 +30,7 @@ static async Task CheckForecastAsync(
     Assert(result.Location == "Test City, Country", "Location formatting changed");
     Assert(result.TemperatureUnit == "F" && result.WindUnit == "mph", "Units changed");
     Assert(result.IsDay, "Current day/night status was not mapped");
+    Assert(result.WindDirection == 225, "Current wind direction was not mapped");
     Assert(result.WeatherCode == 61 && result.Conditions == "Slight rain",
         "Current weather description was not mapped");
     Assert(result.Sunrise == "6:30 AM" && result.Sunset == "6:45 PM",
@@ -61,7 +63,7 @@ static async Task CheckForecastAsync(
         "Code 19 description was not mapped");
     Assert(handler.ForecastUri is not null &&
         handler.ForecastUri.Query.Contains(
-            "current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,is_day") &&
+            "current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,is_day") &&
         handler.ForecastUri.Query.Contains("hourly=temperature_2m,weather_code,is_day,wind_speed_10m") &&
         handler.ForecastUri.Query.Contains(
             "daily=weather_code,temperature_2m_max,temperature_2m_min,wind_speed_10m_max,sunrise,sunset") &&
@@ -114,6 +116,22 @@ static async Task CheckIncompleteWindAsync()
     }
 }
 
+static async Task CheckIncompleteCurrentWindDirectionAsync()
+{
+    var now = new DateTimeOffset(2026, 1, 1, 12, 30, 0, TimeSpan.Zero);
+    using var http = new HttpClient(new ForecastHandler(CreateResponse(
+        "UTC", now.AddMinutes(-90), incompleteCurrentWindDirection: true)));
+    var client = new OpenMeteoClient(http, new FixedClock(now));
+    try
+    {
+        await client.GetForecastAsync(new GeocodedLocation("Test", 0, 0, null, null), "celsius");
+        throw new Exception("Missing current wind direction was accepted");
+    }
+    catch (InvalidDataException ex) when (ex.Message.Contains("required measurement"))
+    {
+    }
+}
+
 static async Task CheckIncompleteForecastAsync()
 {
     var now = new DateTimeOffset(2026, 1, 1, 12, 30, 0, TimeSpan.Zero);
@@ -163,7 +181,8 @@ static async Task CheckIncompleteSunriseSunsetAsync()
 
 static string CreateResponse(
     string timezone, DateTimeOffset firstHour, bool incomplete = false, bool incompleteDaily = false,
-    bool incompleteHourlyWind = false, bool incompleteDailyWind = false, bool incompleteSunrise = false)
+    bool incompleteHourlyWind = false, bool incompleteDailyWind = false, bool incompleteSunrise = false,
+    bool incompleteCurrentWindDirection = false)
 {
     var times = Enumerable.Range(0, 6).Select(i => firstHour.AddHours(i).ToUnixTimeSeconds()).ToArray();
     var zone = TimeZoneInfo.FindSystemTimeZoneById(timezone);
@@ -181,6 +200,7 @@ static string CreateResponse(
             apparent_temperature = 9,
             relative_humidity_2m = 50,
             wind_speed_10m = 5,
+            wind_direction_10m = incompleteCurrentWindDirection ? (int?)null : 225,
             weather_code = 61,
             is_day = 1,
         },

@@ -22,6 +22,7 @@ internal sealed class WeatherService
             current.FeelsLike,
             current.Humidity,
             current.WindSpeed,
+            current.WindDirection,
             settings.Unit == "fahrenheit" ? "F" : "C",
             settings.Unit == "fahrenheit" ? "mph" : "km/h",
             current.IsDay,
